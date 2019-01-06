@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1546751859202.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "45|34|682|0|\n713|32|877|2|\n910|28|1040|2|\n1070|28|1097|2|\n1109|40|1119|0|\n1182|30|1418|2|\n1439|27|1528|2|\n1543|27|1593|0|\n1616|29|1760|0|\n1762|36|1815|0|\n1816|42|1887|0|\n1888|39|1934|0|\n",
+    "hash" : "0",
+    "id" : "73F762BA",
+    "lastKnownWriteTime" : 1546762400,
+    "last_content_update" : 1546762400406,
+    "path" : "~/Dropbox/ncaaR/bigballR/R/all_functions.R",
+    "project_path" : "R/all_functions.R",
+    "properties" : {
+        "cursorPosition" : "1614,29",
+        "scrollLine" : "1601",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
