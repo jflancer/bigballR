@@ -343,7 +343,6 @@ scrape_game <- function(game_id) {
       status <- "SUB_MISTAKE"
     }
 
-
     #===============================================================================================
     #FIGURE OUT WHO'S ON THE COURT
     #===============================================================================================
@@ -465,6 +464,7 @@ scrape_game <- function(game_id) {
             temp$Player_1[which(temp$Event_Type == "Leaves Game")]
           error_catch <- c(error_catch, ons[ons %in% offs])
         }
+        error_catch <- error_catch[!error_catch %in% away_starters]
         non_subs <-
           unique(away_split[which(!away_split$Player_1 %in% c(away_leaving, away_entering)),]$Player_1)
         if (length(away_starters) + length(non_subs) + length(error_catch) > 5) {

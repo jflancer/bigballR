@@ -11,7 +11,7 @@ Description: This package gives users the ability to work with NCAA Basketball d
 License: What license is it under?
 Encoding: UTF-8
 Depends: R (>= 3.1.2)
-LazyData: false
+LazyData: true
 Imports:
     dplyr,
     XML,
