@@ -9,8 +9,7 @@ get_team_schedule(team.id = NA, season = NA, team.name = NA)
 \arguments{
 \item{team.id}{The unique id given to each college/team for each season. This can be found in the url of the team page.}
 
-\item{season}{Alternative to using the id, you can get a team from data(ids) with a season and team name specification.
-String for the season stored as yyy1-y2 (2018-19 is current)}
+\item{season}{Season following format yyy1-y2, ex "2018=19"}
 
 \item{team.name}{Alternative to using the id, you can get a team from data(ids) with a season and team name specification.
 This inputs a team name, to be used along with season. This needs the school name not the complete team name, so "Duke" not "Duke Blue Devils".}
@@ -23,7 +22,7 @@ data frame with each row representing an individual game
 \item{Home_Score} - If the game is finished, the final score for the home team
 \item{Away} - Away team
 \item{Away_Score} - If the game is finished, the final score for the away team
-\item{GameID} - If the game is finished and has play-by-play data available, the game ID used to scrape game data
+\item{Game_ID} - If the game is finished and has play-by-play data available, the game ID used to scrape game data
 \item{isNeutral} - A logical variable that is true when the game was played at a designated neutral destination
 \item{Detail} - Additional detail such as if the game went into OT and # of OTs
 }
