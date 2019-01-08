@@ -155,6 +155,19 @@ scrape_game <- function(game_id) {
 
     # Uses: player name, event
     event_split <- strsplit(events, ",")
+
+    event_split <- lapply(event_split, function(x){
+      if(length(x) == 3){
+        temp <- x
+        temp[1] <- paste0(temp[1], temp[2])
+        temp[2] <- temp[3]
+        temp <- temp[1:2]
+        return(temp)
+      } else{
+        return(x)
+      }
+    })
+
     # This pulls player names from left of comma
     players <-
       unlist(lapply(event_split, function(x) {
