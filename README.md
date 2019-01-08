@@ -17,7 +17,7 @@ devtools::install_github("jflancer/bigballR")
 **Retrieving Game IDs and Other Information**
 
 Manually, game ids can be found in the url when browsing games, for example:
-```4674164```` is the game id for ```https://stats.ncaa.org/game/play_by_play/4674164```
+```4674164``` is the game id for ```https://stats.ncaa.org/game/play_by_play/4674164```
 
 - `get_date_games` data frame with game info and game ids for a given date.
 - `get_team_schedule` data frame with game info and ids for a given team.
