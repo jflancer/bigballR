@@ -44,6 +44,7 @@
 #' @examples
 #' scrape_game(4674164)
 scrape_game <- function(game_id) {
+  #track status of cleanliness of data for game
   status <- "CLEAN"
 
   # Gets html tables to be used
@@ -344,7 +345,7 @@ scrape_game <- function(game_id) {
     }
 
     #===============================================================================================
-    #FIGURE OUT WHO'S ON THE COURT
+    # FIGURE OUT WHO'S ON THE COURT
     #===============================================================================================
 
     # Create empty matrix variables to store on court
@@ -628,7 +629,8 @@ scrape_game <- function(game_id) {
           Event_Type == "Three Point Jumper" ~ 3,
           Event_Type == "Dunk" ~ 2,
           Event_Type == "Free Throw" ~ 1,
-          Event_Type == "Tip In" ~ 2
+          Event_Type == "Tip In" ~ 2,
+          Event_Type == "Hook" ~ 2
         )
       ) %>%
       dplyr::mutate_if(is.factor, as.character) %>%
