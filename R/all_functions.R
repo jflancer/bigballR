@@ -944,7 +944,7 @@ get_team_schedule <-
 
     #Get all game ids
     game_ids <-
-      unlist(stringr::str_extract_all(html, "(?<=[index/])\\d{7}(?=[?])"))
+      unlist(stringr::str_extract_all(html, "(?<=index/)\\d{7}(?=[?])"))
 
     # Handle opponent and neutral games as both are broken up using an '@' character
     parsed <- lapply(df$Opponent, strsplit, "@")
