@@ -77,8 +77,6 @@ scrape_game <- function(game_id) {
       game <- dplyr::bind_rows(game, ot_data)
     }
   }
-  # Removes unneccesary extraneous rows that may arise
-  game <- dplyr::filter(game, !is.na(Score))
 
   # Essentially, there are two different codes/systems used by the NCAA to track games
   # This makes the content completely different and needs to be adjusted for
@@ -86,13 +84,17 @@ scrape_game <- function(game_id) {
   # Can find the format by looking at the first entries as they are constant and unique to each version
   # As V1 is older and uses less detail, we will format the data in accordance with V1
   format <-
-    if ((first_half[1, 1] == "20:00:00") &
+    if (((first_half[1, 1] == "20:00:00") &
         (first_half[1, 2] == "game start" |
-         first_half[1, 2] == "period start")) {
+         first_half[1, 2] == "period start")) |
+        any(grepl("commercial",game[,2]))) {
       "V2"
     } else{
       "V1"
     }
+
+  # Removes unneccesary extraneous rows that may arise
+  game <- dplyr::filter(game, !is.na(Score))
 
   # Get the game metadata
   meta <- table[[3]]
@@ -679,8 +681,7 @@ scrape_game <- function(game_id) {
           !clean_game$Event_Type %in% c(
             "Leaves Game",
             "Enters Game",
-            "Free Throw",
-            "Defensive Rebound"
+            "Free Throw"
           ) & clean_game$Player_1 != "TEAM"
       ),]
     # Warns user of number of entry mistakes found
