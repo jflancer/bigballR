@@ -997,11 +997,11 @@ get_team_schedule <-
 
     # Get the opponent listing
     teams <- as.character(XML::readHTMLTable(url2)[[2]]$V2)
-
+    teams2 <- gsub("St.", "", teams)
     # Search for appreviated team name matches with the full team name
     # So Duke will match with Duke Blue Devils
     rel_team <-
-      teams[sapply(teams, function(x) {
+      teams[sapply(teams2, function(x) {
         any(strsplit(x, " ")[[1]] %in% full_name)
       })]
 
