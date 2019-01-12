@@ -1131,6 +1131,9 @@ get_play_by_play <- function(game_ids) {
   game_list <- game_list[which(!is.na(game_list))]
   #Bind rows together and return combined dataframe
   game_data <- do.call("binder", game_list)
+
+  game_data <- dplyr::select(game_data, -Status, everything())
+
   return(game_data)
 }
 
