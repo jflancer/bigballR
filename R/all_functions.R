@@ -433,18 +433,18 @@ scrape_game <- function(game_id) {
             paste(
               "WARNING: MORE THAN 5 STARTERS FOUND: CHOOSING",
               paste(c(
-                home_starters, error_catch, non_subs
+                non_subs, home_starters, error_catch
               )[1:5], collapse = ", "),
               "FROM",
               paste(c(
-                home_starters, error_catch, non_subs
+                non_subs, home_starters, error_catch
               ), collapse = ", ")
             )
           )
           # Changes status to note an error with starters was found
           status <- "ERROR_STARTER"
         }
-        c(home_starters, error_catch, non_subs)[1:5]
+        c(non_subs, home_starters, error_catch)[1:5]
       } else {
         home_starters[1:5]
       }
@@ -488,17 +488,17 @@ scrape_game <- function(game_id) {
             paste(
               "WARNING: MORE THAN 5 STARTERS FOUND: CHOOSING",
               paste(c(
-                away_starters, error_catch, non_subs
+                non_subs, away_starters, error_catch
               )[1:5], collapse = ", "),
               "FROM",
               paste(c(
-                away_starters, error_catch, non_subs
+                non_subs, away_starters, error_catch
               ), collapse = ", ")
             )
           )
           status <- "ERROR_STARTER"
         }
-        c(away_starters, error_catch, non_subs)[1:5]
+        c(non_subs, away_starters, error_catch)[1:5]
       } else {
         away_starters[1:5]
       }
