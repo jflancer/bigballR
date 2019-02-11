@@ -1058,6 +1058,7 @@ get_team_schedule <-
     # So Duke will match with Duke Blue Devils
     ind <- c()
     for(i in teams2){
+      i <- ifelse(substr(i,1,1) == "@",strsplit(i,"@")[[1]][2], strsplit(i, "@")[[1]][1])
       i <- gsub("[^[:alnum:] ]", "", i)
       i <- trimws(i, which = "both")
       team_val <- strsplit(i, " ")[[1]]
