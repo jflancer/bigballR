@@ -1003,8 +1003,10 @@ get_team_schedule <-
     # So Duke will match with Duke Blue Devils
     ind <- c()
     for(i in teams2){
-      i = gsub("[^[:alnum:] ]", "", i)
-      ind <- c(ind,any(strsplit(i, " ")[[1]] %in% full_name))
+      i <- gsub("[^[:alnum:] ]", "", i)
+      team_val <- strsplit(i, " ")[[1]]
+      matching <- sum(team_val %in% full_name)
+      ind <- c(ind,matching == length(team_val))
     }
     rel_team <- teams[which(ind)]
 
