@@ -34,14 +34,22 @@ Manually, game ids can be found in the url when browsing games, for example:
 - `get_player_lineups` acts as an easy way to filter lineup data, specifying players to exclude/include from the lineups.
 
 **Dataset**
+<<<<<<< HEAD
 - `ids` dataset includes stats.ncaa team name, team conference, season, and team id for 17-18 and 18-19 seasons
+=======
+- `teamids` dataset includes stats.ncaa team name, team conference, season, and team id for 17-18 and 18-19 seasons
+>>>>>>> 73119d4fda9e1c1a6addd3b6d8e881d6a77f3549
 
 ### Use
 
 There are many different progressions and ways to use this package. As an example, here are some natural steps you could take.
 ``` r
 # Get team schedule
+<<<<<<< HEAD
 # Note: if you don't know the team.name, you can look it up in data("ids")
+=======
+# Note: if you don't know the team.name, you can look it up in data("teamids")
+>>>>>>> 73119d4fda9e1c1a6addd3b6d8e881d6a77f3549
 schedule <- get_team_schedule(season = "2018-19", team.name = "Duke")
 # Get play by play for all games played so far in season
 play_by_play <- get_play_by_play(schedule$Game_ID)

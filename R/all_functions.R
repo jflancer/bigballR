@@ -955,7 +955,7 @@ get_date_games <-
 #' the season/team.name parameters can only be used for the 2016-17, 2017-18, 2018-19 seasons
 #' @param team.id The unique id given to each college/team for each season. This can be found in the url of the team page.
 #' @param season Season following format yyy1-y2, ex "2018=19"
-#' @param team.name Alternative to using the id, you can get a team from data(ids) with a season and team name specification.
+#' @param team.name Alternative to using the id, you can get a team from data(teamids) with a season and team name specification.
 #' This inputs a team name, to be used along with season. This needs the school name not the complete team name, so "Duke" not "Duke Blue Devils".
 #' @import XML
 #' @import dplyr
@@ -984,7 +984,7 @@ get_team_schedule <-
     # This can only be done since 16-17 at the moment
     if (is.na(team.id) & !is.na(team.name) & !is.na(season)) {
       team.id <-
-        ids$ID[which(ids$Team == team.name & ids$Season == season)]
+        teamids$ID[which(teamids$Team == team.name & teamids$Season == season)]
     } else if(is.na(team.id) & is.na(team.name) & is.na(season)){
       message("Improper Request")
       return(NULL)
@@ -1121,9 +1121,9 @@ get_team_schedule <-
 #' as well as jersey number, height and school year. Note: currently,
 #' the season/team.name parameters can only be used for the 2016-17, 2017-18, 2018-19 seasons
 #' @param team.id The unique id given to each college/team for each season. This can be found in the url of the team page.
-#' @param season Alternative to using the id, you can get a team from data(ids) with a season and team name specification.
+#' @param season Alternative to using the id, you can get a team from data(teamids) with a season and team name specification.
 #' String for the season stored as yyy1-y2 (2018-19 is current)
-#' @param team.name Alternative to using the id, you can get a team from data(ids) with a season and team name specification.
+#' @param team.name Alternative to using the id, you can get a team from data(teamids) with a season and team name specification.
 #' This inputs a team name, to be used along with season. This needs the school name not the complete team name, so "Duke" not "Duke Blue Devils".
 #' @import XML
 #' @import stringr
@@ -1149,7 +1149,7 @@ get_team_roster <-
     # This can only be done since 16-17 at the moment
     if (is.na(team.id) & !is.na(team.name) & !is.na(season)) {
       team.id <-
-        ids$ID[which(ids$Team == team.name & ids$Season == season)]
+        teamids$ID[which(teamids$Team == team.name & teamids$Season == season)]
     } else if(is.na(team.id) & is.na(team.name) & is.na(season)){
       message("Improper Request")
       return(NULL)
