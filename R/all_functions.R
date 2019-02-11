@@ -374,13 +374,39 @@ scrape_game <- function(game_id) {
 
       #Get vectors for players leaving and entering game for both teams
       home_leaving <-
-        dplyr::filter(half_data, Event_Team == Home, Event_Type == "Leaves Game")$Player_1
+        dplyr::filter(half_data,
+                      Event_Team == Home,
+                      Event_Type == "Leaves Game",
+                      Time != "00:00",
+                      (Time != "20:00" & Half_Status %in% 1:2) | (Time != "05:00" & Half_Status >2)
+                      )$Player_1
       home_entering <-
-        dplyr::filter(half_data, Event_Team == Home, Event_Type == "Enters Game")$Player_1
+        dplyr::filter(half_data,
+                      Event_Team == Home,
+                      Event_Type == "Enters Game",
+                      Time != "00:00",
+                      (Time != "20:00" & Half_Status %in% 1:2) | (Time != "05:00" & Half_Status >2)
+                      )$Player_1
       away_leaving <-
-        dplyr::filter(half_data, Event_Team == Away, Event_Type == "Leaves Game")$Player_1
+        dplyr::filter(half_data,
+                      Event_Team == Away,
+                      Event_Type == "Leaves Game",
+                      Time != "00:00",
+                      (Time != "20:00" & Half_Status %in% 1:2) | (Time != "05:00" & Half_Status >2)
+                      )$Player_1
       away_entering <-
-        dplyr::filter(half_data, Event_Team == Away, Event_Type == "Enters Game")$Player_1
+        dplyr::filter(half_data,
+                      Event_Team == Away,
+                      Event_Type == "Enters Game",
+                      (Time != "20:00" & Half_Status %in% 1:2) | (Time != "05:00" & Half_Status >2)
+                      )$Player_1
+
+      true_home_starters <- (half_data %>%
+        dplyr::filter(Home == Event_Team,
+               (Time == "20:00" & Half_Status %in% 1:2) | (Time == "05:00" & Half_Status >2),
+               Time != "00:00",
+               Event_Type == "Enters Game"
+               ))$Player_1
 
       # Figure out starters by finding players that have a "Leaves Game" entry before an "Enters Game" entry
       if (length(home_leaving) > 0) {
@@ -392,6 +418,14 @@ scrape_game <- function(game_id) {
           }
         }
       }
+      true_home_nonstarters <- (half_data %>%
+                               dplyr::filter(Home == Event_Team,
+                                             (Time == "20:00" & Half_Status %in% 1:2) | (Time == "05:00" & Half_Status >2),
+                                             Event_Type == "Leaves Game"
+                               ))$Player_1
+      home_starters <- home_starters[which(!home_starters %in% true_home_nonstarters)]
+      true_home_starters <- true_home_starters[which(!true_home_starters %in% home_starters)]
+      home_starters <- c(home_starters, true_home_starters)
 
       # To handle data entry errors, often 5 starters cannot be found using proper method above
       home_starters <- if (length(home_starters) < 5) {
@@ -424,7 +458,7 @@ scrape_game <- function(game_id) {
         error_catch <- error_catch[!error_catch %in% home_starters]
         # Looks for players that registered events but never subbed in/out, this implies they are a starter
         non_subs <-
-          unique(home_split[which(!home_split$Player_1 %in% c(home_leaving, home_entering)),]$Player_1)
+          unique(home_split[which(!home_split$Player_1 %in% c(home_leaving, home_entering,home_starters,true_home_nonstarters)),]$Player_1)
 
         # If these methods find more than five starters, just chooses the first five found until a better way is suggested
         # Warn user that this is being used
@@ -450,6 +484,13 @@ scrape_game <- function(game_id) {
       }
 
       # Repeated process is done for the away team, refer to comments above
+      true_away_starters <- (half_data %>%
+                               dplyr::filter(Away == Event_Team,
+                                             (Time == "20:00" & Half_Status %in% 1:2) | (Time == "05:00" & Half_Status >2),
+                                             Time != "00:00",
+                                             Event_Type == "Enters Game"
+                               ))$Player_1
+
       if (length(away_leaving) > 0) {
         away_starters <- c()
         for (j in 1:length(away_leaving)) {
@@ -458,7 +499,17 @@ scrape_game <- function(game_id) {
           }
         }
       }
-      away_starters <- if (length(away_starters) < 5) {
+
+    true_away_nonstarters <- (half_data %>%
+                                dplyr::filter(Away == Event_Team,
+                                              (Time == "20:00" & Half_Status %in% 1:2) | (Time == "05:00" & Half_Status >2),
+                                              Event_Type == "Leaves Game"
+                                ))$Player_1
+    away_starters <- away_starters[which(!away_starters %in% true_away_nonstarters)]
+    true_away_starters <- true_away_starters[which(!true_away_starters %in% away_starters)]
+    away_starters <- c(away_starters, true_away_starters)
+
+    away_starters <- if (length(away_starters) < 5) {
         away_split <-
           dplyr::filter(
             half_data,
@@ -482,7 +533,7 @@ scrape_game <- function(game_id) {
         }
         error_catch <- error_catch[!error_catch %in% away_starters]
         non_subs <-
-          unique(away_split[which(!away_split$Player_1 %in% c(away_leaving, away_entering)),]$Player_1)
+          unique(away_split[which(!away_split$Player_1 %in% c(away_leaving, away_entering,true_away_nonstarters,away_starters)),]$Player_1)
         if (length(away_starters) + length(non_subs) + length(error_catch) > 5) {
           message(
             paste(
@@ -542,7 +593,8 @@ scrape_game <- function(game_id) {
         if (half_data$Event_Type[k] == "Leaves Game" &
             half_data$Event_Team[k] == home_team &
             half_data$Player_1[k] == home_exit_players[1] &
-            !home_enter_players[1] %in% home_mat[k,]) {
+            !home_enter_players[1] %in% home_mat[k,] &
+            half_data$Time[k] != "00:00") {
           #Then find row index of player leaving
           ind <- match(home_mat[k,], home_exit_players[1])
           ind <- which(!is.na(ind))
@@ -563,7 +615,8 @@ scrape_game <- function(game_id) {
         } else if (half_data$Event_Type[k] == "Leaves Game" &
                    half_data$Event_Team[k] == away_team &
                    half_data$Player_1[k] == away_exit_players[1] &
-                   !away_enter_players[1] %in% away_mat[k,]) {
+                   !away_enter_players[1] %in% away_mat[k,] &
+                   half_data$Time[k] != "00:00") {
           ind <- match(away_mat[k,], away_exit_players[1])
           ind <- which(!is.na(ind))
           new_players <- away_mat[k,]
@@ -580,7 +633,8 @@ scrape_game <- function(game_id) {
         } else if (half_data$Event_Type[k] == "Leaves Game" &
                    half_data$Event_Team[k] == away_team &
                    half_data$Player_1[k] == away_exit_players[1] &
-                   away_enter_players[1] %in% away_mat[k,]) {
+                   away_enter_players[1] %in% away_mat[k,] &
+                   half_data$Time[k] != "00:00") {
           away_enter_players <-
             away_enter_players[2:length(away_enter_players)]
           away_exit_players <-
@@ -590,7 +644,8 @@ scrape_game <- function(game_id) {
         } else if (half_data$Event_Type[k] == "Leaves Game" &
                    half_data$Event_Team[k] == home_team &
                    half_data$Player_1[k] == home_exit_players[1] &
-                   home_enter_players[1] %in% home_mat[k,]) {
+                   home_enter_players[1] %in% home_mat[k,] &
+                   half_data$Time[k] != "00:00") {
           home_enter_players <-
             home_enter_players[2:length(home_enter_players)]
           home_exit_players <-
@@ -692,7 +747,7 @@ scrape_game <- function(game_id) {
     }
     # Give user final message about the status of the game they've scraped
     message(paste(date, home_team, "v", away_team, "| ", format, "|", game_id))
-    #Sys.sleep so the ncaa server isn't bombarded
+    #Sys.sleep so the ncaa server isn't overworked
     Sys.sleep(2)
     return(clean_game)
   }
