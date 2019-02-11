@@ -1059,6 +1059,7 @@ get_team_schedule <-
     ind <- c()
     for(i in teams2){
       i <- gsub("[^[:alnum:] ]", "", i)
+      i <- trimws(i, which = "both")
       team_val <- strsplit(i, " ")[[1]]
       matching <- sum(team_val %in% full_name)
       ind <- c(ind,matching == length(team_val))
