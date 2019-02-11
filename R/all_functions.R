@@ -582,10 +582,10 @@ scrape_game <- function(game_id) {
         )
 
       # Vectors of substitutes are used and diminished as events happen to track who is subbed
-      home_exit_players <- home_leaving
-      home_enter_players <- home_entering
-      away_exit_players <- away_leaving
-      away_enter_players <- away_entering
+      home_exit_players <- ifelse(length(home_leaving)>0,home_leaving, "HOPEFULLY THIS IS NOBODY'S NAME OR THERE WOULD BE AN ERROR")
+      home_enter_players <- ifelse(length(home_entering)>0,home_entering, "HOPEFULLY THIS IS NOBODY'S NAME OR THERE WOULD BE AN ERROR")
+      away_exit_players <- ifelse(length(away_leaving)>0,away_leaving, "HOPEFULLY THIS IS NOBODY'S NAME OR THERE WOULD BE AN ERROR")
+      away_enter_players <- ifelse(length(away_entering)>0,away_entering, "HOPEFULLY THIS IS NOBODY'S NAME OR THERE WOULD BE AN ERROR")
 
       # Go through each row of the data frame of events for each half
       for (k in 1:(nrow(half_data))) {
