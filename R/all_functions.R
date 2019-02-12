@@ -52,6 +52,7 @@ scrape_game <- function(game_id) {
   url <- paste0(base_url, game_id)
   table <- XML::readHTMLTable(url)
 
+
   # Pull scores for each half
   half_scores <- table[[1]]
 
@@ -102,6 +103,7 @@ scrape_game <- function(game_id) {
   # Get Game Date- removing start time because I don't really see a use in play by play
   datetime <- colnames(meta)[2]
   date <- substr(datetime, 1, 10)
+  date <- ifelse(is.null(date),"",date)
 
   # Get the teams playing
   away_team <- colnames(game)[2]
