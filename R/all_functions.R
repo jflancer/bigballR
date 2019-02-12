@@ -485,6 +485,25 @@ scrape_game <- function(game_id) {
         home_starters[1:5]
       }
 
+      # Attempting to guess on who is on the court when a player plays the entire half and doesn't register a stat
+      # Best guess I could think of was look at the last player to record a stat in prior halfs
+      if(any(is.na(home_starters))){
+        numb.players <- sum(is.na(home_starters))
+        half_using <- if(i ==1){2:(numbOTs+1)} else {1:i}
+        prior_half <- filter(dirty_game,
+                             Half_Status %in% half_using,
+                             Event_Team == Home,
+                             !Player_1 %in% c(home_starters,home_enter_players, home_leaving,"TEAM"),
+                             !Event_Type %in% c("Enters Game"))
+        players <- if(i == 1){
+          unique(prior_half$Player_1, fromLast = T)[1:numb.players]
+        } else {
+             rev(unique(prior_half$Player_1, fromLast = T))[1:numb.players]
+          }
+        home_starters[is.na(home_starters)] <- players
+        message(paste("5 starters not found for half",i, "choosing",players, collapse = "/"))
+      }
+
       # Repeated process is done for the away team, refer to comments above
       true_away_starters <- (half_data %>%
                                dplyr::filter(Away == Event_Team,
@@ -556,32 +575,33 @@ scrape_game <- function(game_id) {
         away_starters[1:5]
       }
 
+    if(any(is.na(away_starters))){
+      numb.players <- sum(is.na(away_starters))
+      half_using <- if(i ==1){2:(numbOTs+1)} else {1:i}
+      prior_half <- filter(dirty_game,
+                           Half_Status %in% half_using,
+                           Event_Team == Away,
+                           !Player_1 %in% c(away_starters,away_entering,away_leaving,"TEAM"),
+                           !Event_Type %in% c("Enters Game"))
+      players <- if(i == 1){
+        unique(prior_half$Player_1, fromLast = T)[1:numb.players]
+      } else {
+        rev(unique(prior_half$Player_1, fromLast = T))[1:numb.players]
+      }
+      away_starters[is.na(away_starters)] <- players
+      message(paste("5 starters not found for half",i, "choosing",players, collapse = "/"))
+    }
+
       # Now an empty matrix is built that will be iterated through to store the lineups
       # Repeat process is done for home and away team
 
-      home_mat <-
-        matrix(
-          c(
-            home_starters,
-            home_starters,
-            rep(NA_character_, nrow(half_data) * 5 - 5)
-          ),
-          nrow = nrow(half_data) + 1,
-          ncol = 5,
-          byrow = T
-        )
+      home_mat <- matrix(
+          c(home_starters,home_starters,rep(NA_character_, nrow(half_data) * 5 - 5)),
+          nrow = nrow(half_data) + 1, ncol = 5, byrow = T)
 
-      away_mat <-
-        matrix(
-          c(
-            away_starters,
-            away_starters,
-            rep(NA_character_, nrow(half_data) * 5 - 5)
-          ),
-          nrow = nrow(half_data) + 1,
-          ncol = 5,
-          byrow = T
-        )
+      away_mat <- matrix(
+          c(away_starters,away_starters,rep(NA_character_, nrow(half_data) * 5 - 5)),
+          nrow = nrow(half_data) + 1, ncol = 5, byrow = T)
 
       # Vectors of substitutes are used and diminished as events happen to track who is subbed
       home_exit_players <- if(length(home_leaving)>0){home_leaving}else{"HOPEFULLY THIS IS NOBODY'S NAME"}
