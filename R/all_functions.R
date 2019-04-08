@@ -1017,12 +1017,34 @@ get_team_schedule <-
     html <- readLines(url)
     tables <- XML::readHTMLTable(html)
     df <- data.frame(as.matrix(tables[[2]]), stringsAsFactors = F)
-    colnames(df) <- df[1,]
-    df <- df[-1,]
 
-    #Get all game ids
+    #New
+    df <- df[seq(1,nrow(df), by = 2),]
+    # colnames(df) <- df[1,]
+    # df <- df[-1,]
+
+    #Get all game ids (old code)
+    # game_ids <-
+    #   unlist(stringr::str_extract_all(html, "(?<=index/)\\d{7}(?=[?])"))
+    # New code
     game_ids <-
-      unlist(stringr::str_extract_all(html, "(?<=index/)\\d{7}(?=[?])"))
+      unlist(stringr::str_extract_all(html, "(?<=contests/)\\d{7}(?=[/])"))
+
+    # Game IDs links to box score game id, not play by play id
+    # Unfortunately need to now parse webpage for each game played to find game id
+    url2 <-
+      paste0("https://stats.ncaa.org/contests/", game_ids, "/box_score")
+
+    new_ids <- c()
+    # Have to iterate through every game for the given day and find all play by play ids on the box score page
+    for (i in 1:length(url2)) {
+      temp_html <- readLines(url2[i])
+      new_id <- unlist(stringr::str_extract(temp_html, "(?<=[/])\\d{7}"))
+      new_id <- unique(new_id[!is.na(new_id)])
+      new_ids <- c(new_ids,new_id)
+      Sys.sleep(1)
+    }
+    game_ids <- new_ids
 
     # Handle opponent and neutral games as both are broken up using an '@' character
     parsed <- lapply(df$Opponent, strsplit, "@")
@@ -1061,19 +1083,26 @@ get_team_schedule <-
 
     # There is actually no easy way to find the name of the team being scraped
     # Need to go to one of their opponents team pages and find them listed
-    first_game <- stringr::str_extract(html, "(?<=team/)\\d+/\\d+")
+    # first_game <- stringr::str_extract(html, "(?<=team/)\\d+/\\d+")
+    # first_game <- first_game[!is.na(first_game)]
+    # url2 <-
+    #   readLines(paste0("https://stats.ncaa.org/team/", first_game[1]))
+
+
+    # New version
+    first_game <- stringr::str_extract(html, "(?<=teams/)\\d+(?=[\\\"])")
     first_game <- first_game[!is.na(first_game)]
-    url2 <-
-      readLines(paste0("https://stats.ncaa.org/team/", first_game[1]))
+    url2 <- readLines(paste0("https://stats.ncaa.org/teams/", first_game[1]))
 
     # Gets full team name which for example is Duke Blue Devils, etc.
     full_name <-
       strsplit(unlist(
-        stringr::str_extract_all(html, "(?<=ATHLETICS_URL\\\">)(.*)(?=</a>)")
+        stringr::str_extract_all(html, "(?<=ATHLETICS_URL\">)(.*)(?=[</a>])")
       ), " ")[[1]]
 
     # Get the opponent listing
-    teams <- as.character(XML::readHTMLTable(url2)[[2]]$V2)
+    # teams <- as.character(XML::readHTMLTable(url2)[[2]]$V2) OLD
+    teams <- as.character(XML::readHTMLTable(url2)[[2]]$Opponent)
     teams2 <- gsub("St.", "", teams)
     teams2 <- teams2[!is.na(teams2)]
     # Search for appreviated team name matches with the full team name
@@ -1095,7 +1124,8 @@ get_team_schedule <-
                         trimws(strsplit(rel_team, split = "@")[[1]][1]))
 
     #This cleans the score information
-    score <- strsplit(df$Result, " - ")
+    # score <- strsplit(df$Result, " - ") old
+    score <- strsplit(df$Result, "-")
     selected_score <-
       trimws(gsub("W", "", gsub("L", "", sapply(score, function(x) {
         x[1]
