@@ -1372,6 +1372,14 @@ get_lineups <-
         dplyr::filter(Garbage_Time == F) %>%
         dplyr::select(-Garbage_Thresh, -Garbage_Time)
     }
+
+    missing_players <- apply(lineup_stuff[,19:28], 2, function(x){sum(is.na(x))})
+    missing_rows <- apply(lineup_stuff[,19:28], 1, function(x){sum(is.na(x))})
+    message(paste("Forced to remove", length(which(missing_rows!=0)), "rows due to missing players on courts"))
+
+    lineup_stuff <- lineup_stuff %>%
+      filter(missing_rows==0)
+
     # Now sorts the home and away player alphabetically so players are always in the same column for a given lineup
     lineup_stuff <- apply(lineup_stuff, 1, function(x)
     {
@@ -1504,6 +1512,7 @@ get_lineups <-
       )
 
     #combine lineups from home and away and calculate a variety of stats
+    suppressMessages(
     lineups <- dplyr::bind_rows(home_lineups, away_lineups) %>%
       dplyr::group_by(P1, P2, P3, P4, P5, Team) %>%
       dplyr::summarise_if(is.numeric, sum) %>%
@@ -1553,7 +1562,7 @@ get_lineups <-
       #no need to have long decimals so round everything
       dplyr::mutate_if(is.numeric, ~ round(., 2)) %>%
       dplyr::ungroup() %>%
-      dplyr::filter(Mins > 0)
+      dplyr::filter(Mins > 0))
     #change any NA/infinite/etc. that comes up in calculations to 0
     lineups[is.na(lineups)] <- 0
 
