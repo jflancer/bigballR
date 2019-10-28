@@ -811,6 +811,8 @@ get_date_games <-
     # Find the season id needed by the url given the date of the game
     # The pbp only goes back to 2011 in most cases, so no need to pull deeper
     seasonid <- case_when(
+      dateform > as.Date("2019-05-01") &
+        dateform <= as.Date("2020-05-01") ~ 17060,
       dateform > as.Date("2018-05-01") &
         dateform <= as.Date("2019-05-01") ~ 16700,
       #18-19
@@ -960,15 +962,20 @@ get_date_games <-
     )
 
     # Have to iterate through every game for the given day and find all play by play ids on the box score page
-    for (i in 1:length(url2)) {
-      temp_html <- readLines(url2[i])
-      new_id <- unlist(stringr::str_extract(temp_html, "(?<=[/])\\d{7}"))
-      new_id <- unique(new_id[!is.na(new_id)])
-      game_data$GameID[i] <- new_id
-      Sys.sleep(2)
+    if(length(game_ids)>0){
+      for (i in 1:length(url2)) {
+        temp_html <- readLines(url2[i])
+        new_id <- unlist(stringr::str_extract(temp_html, "(?<=[/])\\d{7}"))
+        new_id <- unique(new_id[!is.na(new_id)])
+        game_data$GameID[i] <- new_id
+        Sys.sleep(0.5)
+      }
+    } else {
+      message("No Game IDs Found")
     }
+
     return(game_data)
-  }
+}
 
 #' Team Schedule Scrape
 #'
@@ -1036,16 +1043,21 @@ get_team_schedule <-
       paste0("https://stats.ncaa.org/contests/", game_ids, "/box_score")
 
     new_ids <- c()
+    message("Compiling Game IDs")
+    pb = txtProgressBar(min = 0, max = length(url2), initial = 0)
+
     # Have to iterate through every game for the given day and find all play by play ids on the box score page
     for (i in 1:length(url2)) {
       temp_html <- readLines(url2[i])
       new_id <- unlist(stringr::str_extract(temp_html, "(?<=[/])\\d{7}"))
       new_id <- unique(new_id[!is.na(new_id)])
       new_ids <- c(new_ids,new_id)
-      Sys.sleep(1)
+      Sys.sleep(0.5)
+      setTxtProgressBar(pb,i)
     }
     game_ids <- new_ids
-
+    close(pb)
+    message("\nParsing Schedule")
     # Handle opponent and neutral games as both are broken up using an '@' character
     parsed <- lapply(df$Opponent, strsplit, "@")
 
@@ -1087,7 +1099,6 @@ get_team_schedule <-
     # first_game <- first_game[!is.na(first_game)]
     # url2 <-
     #   readLines(paste0("https://stats.ncaa.org/team/", first_game[1]))
-
 
     # New version
     first_game <- stringr::str_extract(html, "(?<=teams/)\\d+(?=[\\\"])")
@@ -1158,14 +1169,13 @@ get_team_schedule <-
 
     #Give user final status update and returns the df
     message(paste0(
-      team_name,
+      team_name[1],
       " complete--",
       nrow(team_data),
       "/",
       length(game_ids),
       " | games/ids found"
     ))
-    Sys.sleep(2)
     return(team_data)
   }
 
@@ -1221,8 +1231,8 @@ get_team_roster <-
     html_roster <- readLines(roster_url)
     table <-
       data.frame(XML::readHTMLTable(html_roster)[[1]][, 1:5], stringsAsFactors = F)
-    #Finally return the more usable roster page
-    Sys.sleep(2)
+    # Return the more usable roster page
+    Sys.sleep(1)
     return(table)
   }
 
@@ -1548,7 +1558,7 @@ get_lineups <-
     lineups[is.na(lineups)] <- 0
 
     return(lineups)
-  }
+}
 
 #' On-Off Comparison Function
 #'
