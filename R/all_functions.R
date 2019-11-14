@@ -1328,7 +1328,7 @@ get_lineups <-
     if (keep.dirty == F) {
       #If so, the most common mistake found is the player discrepancy, this pulls the count
       n_errors <-
-        sapply(play_by_play_data$Status, function(x) {
+        sapply(as.character(play_by_play_data$Status), function(x) {
           as.numeric(strsplit(x, "ENTRY-")[[1]][2])
         })
       n_errors[is.na(n_errors)] <- 0
@@ -1370,7 +1370,8 @@ get_lineups <-
           Garbage_Time = cumsum(Garbage_Thresh) >= 1
         ) %>%
         dplyr::filter(Garbage_Time == F) %>%
-        dplyr::select(-Garbage_Thresh, -Garbage_Time)
+        dplyr::select(-Garbage_Thresh, -Garbage_Time) %>%
+        dplyr::ungroup()
     }
 
     missing_players <- apply(lineup_stuff[,19:28], 2, function(x){sum(is.na(x))})
