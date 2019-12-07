@@ -1396,6 +1396,7 @@ get_lineups <-
 
     #Get all home lineups and calculate a variety of stats for each lineup
     #o is used to denote opponents
+    suppressWarnings(
     home_lineups <- lineup_stuff2 %>%
       dplyr::mutate_if(is.factor, as.character) %>%
       dplyr::group_by(Home.1, Home.2, Home.3, Home.4, Home.5, Home) %>%
@@ -1443,6 +1444,12 @@ get_lineups <-
         oRIMA = sum((
           Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
         ) * (Event_Team == Away) * 1, na.rm = T),
+        RIMM = sum((Event_Result == "made") * (
+          Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+        ) * (Event_Team == Home) * 1, na.rm = T),
+        oRIMM = sum((Event_Result == "made") * (
+          Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+        ) * (Event_Team == Away) * 1, na.rm = T),
         #blocked shots
         BLK = sum((Event_Type == "Blocked Shot") * (Event_Team == Home) * 1, na.rm = T),
         oBLK = sum((Event_Type == "Blocked Shot") * (Event_Team == Away) * 1, na.rm = T),
@@ -1457,8 +1464,9 @@ get_lineups <-
         P4 = Home.4,
         P5 = Home.5,
         Team = Home
-      )
+      ))
     #same done for away team
+    suppressWarnings(
     away_lineups <- lineup_stuff2 %>%
       dplyr::mutate_if(is.factor, as.character) %>%
       dplyr::group_by(Away.1, Away.2, Away.3, Away.4, Away.5, Away) %>%
@@ -1498,6 +1506,12 @@ get_lineups <-
         oRIMA = sum((
           Event_Type %in% c("Dunk", "Layup", "Hook","Tip-In")
         ) * (Event_Team == Home) * 1, na.rm = T),
+        RIMM = sum((Event_Result == "made") * (
+          Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+        ) * (Event_Team == Away) * 1, na.rm = T),
+        oRIMM = sum((Event_Result == "made") * (
+          Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+        ) * (Event_Team == Home) * 1, na.rm = T),
         BLK = sum((Event_Type == "Blocked Shot") * (Event_Team == Away) * 1, na.rm = T),
         oBLK = sum((Event_Type == "Blocked Shot") * (Event_Team == Home) * 1, na.rm = T),
         AST = sum((!is.na(Player_2)) * (Event_Team == Away) * 1, na.rm = T),
@@ -1510,10 +1524,10 @@ get_lineups <-
         P4 = Away.4,
         P5 = Away.5,
         Team = Away
-      )
+      ))
 
     #combine lineups from home and away and calculate a variety of stats
-    suppressMessages(
+    suppressWarnings(
     lineups <- dplyr::bind_rows(home_lineups, away_lineups) %>%
       dplyr::group_by(P1, P2, P3, P4, P5, Team) %>%
       dplyr::summarise_if(is.numeric, sum) %>%
@@ -1521,6 +1535,10 @@ get_lineups <-
         #estimate of possesions using commonly accepted formula
         POSS = (FGA + .475 * FTA - ORB + TO + oFGA + .475 * oFTA - oORB + oTO) /
           2,
+        FG. = FGM / FGA,
+        oFG. = oFGM / oFGA,
+        RIM. = RIMM / RIMA,
+        oRIM. = oRIMM / oRIMA,
         #true shooting percentage
         TS. = (PTS / 2) / (FGA + .475 * FTA),
         oTS. = (oPTS / 2) / (oFGA + .475 * oFTA),
@@ -1555,7 +1573,7 @@ get_lineups <-
         DEFF = oPTS / POSS * 100,
         NETEFF = OEFF - DEFF,
         #using commonly accepted pace formula for time per possession
-        PACE = 40 * (POSS / (0.2 * Mins)),
+        PACE = Mins / POSS,
         #estimate of shots per possesion
         ShotsPerPoss = 1 + (ORB - TO) / POSS,
         oShotsPerPoss = 1 + (oORB - oTO) / POSS
