@@ -1392,11 +1392,16 @@ get_lineups <-
     #Converts the sorted back into a data frame
     lineup_stuff2 <-
       data.frame(matrix(unlist(lineup_stuff), ncol = 29, byrow = T))
-    colnames(lineup_stuff2) <- colnames(play_by_play_data)
+
+    if(ncol(play_by_play_data) == 30){
+      colnames(lineup_stuff2) <- colnames(play_by_play_data)[-30]
+    } else {
+      colnames(lineup_stuff2) <- colnames(play_by_play_data)
+    }
 
     #Get all home lineups and calculate a variety of stats for each lineup
     #o is used to denote opponents
-    suppressWarnings(
+    suppressMessages(
     home_lineups <- lineup_stuff2 %>%
       dplyr::mutate_if(is.factor, as.character) %>%
       dplyr::group_by(Home.1, Home.2, Home.3, Home.4, Home.5, Home) %>%
@@ -1466,7 +1471,7 @@ get_lineups <-
         Team = Home
       ))
     #same done for away team
-    suppressWarnings(
+    suppressMessages(
     away_lineups <- lineup_stuff2 %>%
       dplyr::mutate_if(is.factor, as.character) %>%
       dplyr::group_by(Away.1, Away.2, Away.3, Away.4, Away.5, Away) %>%
@@ -1527,7 +1532,7 @@ get_lineups <-
       ))
 
     #combine lineups from home and away and calculate a variety of stats
-    suppressWarnings(
+    suppressMessages(
     lineups <- dplyr::bind_rows(home_lineups, away_lineups) %>%
       dplyr::group_by(P1, P2, P3, P4, P5, Team) %>%
       dplyr::summarise_if(is.numeric, sum) %>%
