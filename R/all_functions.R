@@ -1833,7 +1833,9 @@ get_player_stats <-
           Garbage_Time = cumsum(Garbage_Thresh) >= 1
         ) %>%
         dplyr::filter(Garbage_Time == F) %>%
-        dplyr::select(-Garbage_Thresh, -Garbage_Time)
+        dplyr::select(-Garbage_Thresh, -Garbage_Time) %>%
+        dplyr::ungroup()
+
       message(paste0(round((
         total - nrow(player_filtered)
       ) / total, 2) * 100, "% garbage time entries removed"))
@@ -1869,13 +1871,15 @@ get_player_stats <-
       ) %>%
       dplyr::filter(Player_1 != "TEAM") %>%
       dplyr::rename(Player = Player_1,
-             Team = Event_Team)
+             Team = Event_Team) %>%
+      dplyr::ungroup()
 
     # Can then count assists form player 2 column
     assist_stats <- player_filtered %>%
       dplyr::group_by(ID, Player_2) %>%
       dplyr::summarise(AST = n()) %>%
-      dplyr::rename(Player = Player_2)
+      dplyr::rename(Player = Player_2) %>%
+      dplyr::ungroup()
 
     # passes in pbp to calculate minutes for each player using extraneous function
     minutes <- get_mins(player_filtered)
@@ -1931,7 +1935,9 @@ get_player_stats <-
           FGA, FG., TPM, TPA, TP., FTM, FTA, FT.,
           RIMA, RIMM, RIM., TS., eFG., PBACK,
           ORB, DRB, AST, STL, BLK, TOV, PF, PTS, GS
-        )
+        ) %>%
+        dplyr::ungroup()
+
       multi_game[is.na(multi_game)] <- 0
       return(multi_game)
     } else{
@@ -2076,8 +2082,8 @@ get_mins <- function(player_filtered) {
     #group by the given player column in iteration
     #calculate stats needed to get the players minutes and possessions on the court for
     player <- player_filtered %>%
-      group_by_at(vars(cols[i], "ID")) %>%
-      summarise(
+      dplyr::group_by_at(vars(cols[i], "ID")) %>%
+      dplyr::summarise(
         Mins = sum(Event_Length, na.rm = T) / 60,
         FGA = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Home) *
                     1, na.rm = T),
@@ -2098,18 +2104,20 @@ get_mins <- function(player_filtered) {
         FTA = sum((Shot_Value == 1) * (Event_Team == Away) * 1, na.rm = T),
         oFTA = sum((Shot_Value == 1) * (Event_Team == Home) * 1, na.rm = T)
       ) %>%
-      rename(Player =  cols[i]) %>%
-      mutate(POSS = (FGA + .475 * FTA - ORB + TO + oFGA + .475 * oFTA - oORB + oTO) /
+      dplyr::ungroup() %>%
+      dplyr::rename(Player =  cols[i]) %>%
+      dplyr::mutate(POSS = (FGA + .475 * FTA - ORB + TO + oFGA + .475 * oFTA - oORB + oTO) /
                2) %>%
-      mutate_if(is.numeric, round, 2) %>%
-      ungroup()
+      dplyr::mutate_if(is.numeric, round, 2) %>%
+      dplyr::ungroup()
     #once this is calculated add to the data frame of all player columns
     player_data <- rbind(player_data, player)
   }
   #can now group by each player name and get their total minutes and possessions
   final_df <- player_data %>%
-    group_by(Player, ID) %>%
-    summarise(MINS = sum(Mins),
-              POSS = sum(POSS))
+    dplyr::group_by(Player, ID) %>%
+    dplyr::summarise(MINS = sum(Mins),
+              POSS = sum(POSS)) %>%
+    dplyr::ungroup()
 }
 binder <- dplyr::bind_rows
