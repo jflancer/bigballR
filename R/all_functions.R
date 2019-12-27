@@ -1627,7 +1627,7 @@ on_off_generator <-
     )
     #if the wrong number of teams are identified
     if (length(find_team) != 1) {
-      message("ERROR- INCORRECT TEAMS SELECTED")
+      message("ERROR- Player team not found")
       return(NULL)
     }
     # Generates all relevant lineups using the included and excluded variables
@@ -1672,6 +1672,10 @@ on_off_generator <-
     #convert to get metrics defined previously
     final <- final %>%
       dplyr::mutate(
+        FG. = FGM / FGA,
+        oFG. = oFGM / oFGA,
+        RIM. = RIMM / RIMA,
+        oRIM. = oRIMM / oRIMA,
         TS. = (PTS / 2) / (FGA + .475 * FTA),
         oTS. = (oPTS / 2) / (oFGA + .475 * oFTA),
         eFG. = (FGM + 0.5 * TPM) / FGA,
