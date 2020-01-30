@@ -480,7 +480,7 @@ scrape_game <- function(game_id) {
 
         # If these methods find more than five starters, just chooses the first five found until a better way is suggested
         # Warn user that this is being used
-        if (length(home_starters) + length(non_subs) + length(error_catch) + length(play_before_sub) >= 5) {
+        if (length(home_starters) + length(non_subs) + length(error_catch) + length(play_before_sub) > 5) {
           message(
             paste(
               "Using approximate starter finder, choosing:\n",
@@ -494,7 +494,13 @@ scrape_game <- function(game_id) {
             )
           )
           unique(c(home_starters, play_before_sub, non_subs, error_catch))[1:5]
-      }
+        } else if(length(home_starters) + length(non_subs) + length(error_catch) + length(play_before_sub) == 5){
+          unique(c(
+            non_subs, home_starters, play_before_sub, error_catch
+          ))
+        } else {
+          message("Not Enough Starters Found: Likely Errors In On/Off")
+        }
     } else {
         home_starters[1:5]
     }
@@ -579,7 +585,7 @@ scrape_game <- function(game_id) {
           filter(!Player_1 %in% away_starters) %>%
           unlist(., use.names = F)
 
-        if (length(away_starters) + length(non_subs) + length(error_catch) + length(play_before_sub) >= 5) {
+        if (length(away_starters) + length(non_subs) + length(error_catch) + length(play_before_sub) > 5) {
           message(
             paste(
               "Using approximate starter finder, choosing:\n",
@@ -589,12 +595,17 @@ scrape_game <- function(game_id) {
               "\nfrom: ",
               paste(unique(c(
                 non_subs, away_starters, play_before_sub, error_catch
-              ))[1:5], collapse = ", ")
+              )), collapse = ", ")
             )
           )
-          status <- "ERROR_STARTER"
-          unique(c(non_subs, away_starters, play_before_sub, error_catch))[1:5]
-      }
+          unique(c(away_starters, play_before_sub, non_subs, error_catch))[1:5]
+        } else if(length(away_starters) + length(non_subs) + length(error_catch) + length(play_before_sub) == 5){
+          unique(c(
+            non_subs, away_starters, play_before_sub, error_catch
+          ))
+        } else {
+          message("Not Enough Starters Found: Likely Errors In On/Off")
+        }
     } else {
         away_starters[1:5]
     }
