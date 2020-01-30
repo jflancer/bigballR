@@ -309,16 +309,24 @@ scrape_game <- function(game_id) {
         ),
         Status = "NO_PLAYER" #set status variable mentioned earlier
       ) %>%
+      bind_cols(as.data.frame(matrix(rep("NO_PLAYER", nrow(mild_game)*10),
+                       ncol = 10,
+                       nrow = nrow(mild_game))) %>%
+                  rename(Home.1 = V1, Home.2 = V2, Home.3 = V3, Home.4 = V4, Home.5 = V5,
+                         Away.1 = V6, Away.2 = V7, Away.3 = V8, Away.4 = V9, Away.5 = V10
+                         )) %>%
       dplyr::select(
         ID:Away,
         Half_Status,
         Time:Event_Team,
+        Event_Description,
+        Player_1,
+        Player_2,
         Event_Type,
         Event_Result,
         Shot_Value,
-        Player_1,
-        Player_2,
         Event_Length,
+        Home.1:Away.5,
         Status
       )
 
@@ -462,28 +470,34 @@ scrape_game <- function(game_id) {
         non_subs <-
           unique(home_split[which(!home_split$Player_1 %in% c(home_leaving, home_entering,home_starters,true_home_nonstarters)),]$Player_1)
 
+        # See if player recorded an event before subbing out at start
+        play_before_sub <- home_split %>%
+          group_by(Player_1) %>%
+          filter(first(Game_Seconds) < first(.$Game_Seconds[which(.$Event_Type == "Leaves Game")])) %>%
+          distinct(Player_1) %>%
+          filter(!Player_1 %in% home_starters) %>%
+          unlist(., use.names = F)
+
         # If these methods find more than five starters, just chooses the first five found until a better way is suggested
         # Warn user that this is being used
-        if (length(home_starters) + length(non_subs) + length(error_catch) > 5) {
+        if (length(home_starters) + length(non_subs) + length(error_catch) + length(play_before_sub) >= 5) {
           message(
             paste(
-              "WARNING: MORE THAN 5 STARTERS FOUND: CHOOSING",
-              paste(c(
-                non_subs, home_starters, error_catch
-              )[1:5], collapse = ", "),
-              "FROM",
-              paste(c(
-                non_subs, home_starters, error_catch
-              ), collapse = ", ")
+              "Using approximate starter finder, choosing:\n",
+              paste(unique(c(
+                non_subs, home_starters, play_before_sub, error_catch
+              ))[1:5], collapse = ", "),
+              "\nfrom: ",
+              paste(unique(c(
+                non_subs, home_starters, play_before_sub, error_catch
+              )), collapse = ", ")
             )
           )
-          # Changes status to note an error with starters was found
-          status <- "ERROR_STARTER"
-        }
-        c(non_subs, home_starters, error_catch)[1:5]
-      } else {
-        home_starters[1:5]
+          unique(c(home_starters, play_before_sub, non_subs, error_catch))[1:5]
       }
+    } else {
+        home_starters[1:5]
+    }
 
       # Attempting to guess on who is on the court when a player plays the entire half and doesn't register a stat
       # Best guess I could think of was look at the last player to record a stat in prior halfs
@@ -553,27 +567,37 @@ scrape_game <- function(game_id) {
           error_catch <- c(error_catch, ons[ons %in% offs])
         }
         error_catch <- error_catch[!error_catch %in% away_starters]
+
         non_subs <-
           unique(away_split[which(!away_split$Player_1 %in% c(away_leaving, away_entering,true_away_nonstarters,away_starters)),]$Player_1)
-        if (length(away_starters) + length(non_subs) + length(error_catch) > 5) {
+
+        # See if player recorded an event before subbing out at start
+        play_before_sub <- away_split %>%
+          group_by(Player_1) %>%
+          filter(first(Game_Seconds) < first(.$Game_Seconds[which(.$Event_Type == "Leaves Game")])) %>%
+          distinct(Player_1) %>%
+          filter(!Player_1 %in% away_starters) %>%
+          unlist(., use.names = F)
+
+        if (length(away_starters) + length(non_subs) + length(error_catch) + length(play_before_sub) >= 5) {
           message(
             paste(
-              "WARNING: MORE THAN 5 STARTERS FOUND: CHOOSING",
-              paste(c(
-                non_subs, away_starters, error_catch
-              )[1:5], collapse = ", "),
-              "FROM",
-              paste(c(
-                non_subs, away_starters, error_catch
-              ), collapse = ", ")
+              "Using approximate starter finder, choosing:\n",
+              paste(unique(c(
+                non_subs, away_starters, play_before_sub, error_catch
+              ))[1:5], collapse = ", "),
+              "\nfrom: ",
+              paste(unique(c(
+                non_subs, away_starters, play_before_sub, error_catch
+              ))[1:5], collapse = ", ")
             )
           )
           status <- "ERROR_STARTER"
-        }
-        c(non_subs, away_starters, error_catch)[1:5]
-      } else {
-        away_starters[1:5]
+          unique(c(non_subs, away_starters, play_before_sub, error_catch))[1:5]
       }
+    } else {
+        away_starters[1:5]
+    }
 
     if(any(is.na(away_starters))){
       numb.players <- sum(is.na(away_starters))
@@ -1093,46 +1117,7 @@ get_team_schedule <-
       }
     }
 
-    # There is actually no easy way to find the name of the team being scraped
-    # Need to go to one of their opponents team pages and find them listed
-    # first_game <- stringr::str_extract(html, "(?<=team/)\\d+/\\d+")
-    # first_game <- first_game[!is.na(first_game)]
-    # url2 <-
-    #   readLines(paste0("https://stats.ncaa.org/team/", first_game[1]))
-
-    # New version
-    first_game <- stringr::str_extract(html, "(?<=teams/)\\d+(?=[\\\"])")
-    first_game <- first_game[!is.na(first_game)]
-    url2 <- readLines(paste0("https://stats.ncaa.org/teams/", first_game[1]))
-
-    # Gets full team name which for example is Duke Blue Devils, etc.
-    full_name <-
-      strsplit(unlist(
-        stringr::str_extract_all(html, "(?<=ATHLETICS_URL\">)(.*)(?=[</a>])")
-      ), " ")[[1]]
-
-    # Get the opponent listing
-    # teams <- as.character(XML::readHTMLTable(url2)[[2]]$V2) OLD
-    teams <- as.character(XML::readHTMLTable(url2)[[2]]$Opponent)
-    teams2 <- gsub("St.", "", teams)
-    teams2 <- teams2[!is.na(teams2)]
-    # Search for appreviated team name matches with the full team name
-    # So Duke will match with Duke Blue Devils
-    ind <- c()
-    for(i in teams2){
-      i <- ifelse(substr(i,1,1) == "@",strsplit(i,"@")[[1]][2], strsplit(i, "@")[[1]][1])
-      i <- gsub("[^[:alnum:] ]", "", i)
-      i <- trimws(i, which = "both")
-      team_val <- strsplit(i, " ")[[1]]
-      matching <- sum(team_val %in% full_name)
-      ind <- c(ind,matching == length(team_val))
-    }
-    rel_team <- teams[which(ind)]
-
-    # This trims any extra whitespace and removes the @ to find the working team name
-    team_name <- ifelse(substr(rel_team, 1, 1) == "@",
-                        trimws(strsplit(rel_team, split = "@")[[1]][2]),
-                        trimws(strsplit(rel_team, split = "@")[[1]][1]))
+    team_name <- teamids$Team[which(teamids$ID == team.id)]
 
     #This cleans the score information
     # score <- strsplit(df$Result, " - ") old
@@ -1177,7 +1162,7 @@ get_team_schedule <-
       " | games/ids found"
     ))
     return(team_data)
-  }
+}
 
 #' Team Roster Scrape
 #'
@@ -1373,6 +1358,12 @@ get_lineups <-
         dplyr::select(-Garbage_Thresh, -Garbage_Time) %>%
         dplyr::ungroup()
     }
+
+    # if(ncol(lineup_stuff) == 18) {
+    #   lineup_stuff <- cbind(lineup_stuff, matrix(rep("Team", nrow(lineup_stuff)*10),
+    #                                              ncol = 10,
+    #                                              nrow = nrow(lineup_stuff))
+    # }
 
     missing_players <- apply(lineup_stuff[,19:28], 2, function(x){sum(is.na(x))})
     missing_rows <- apply(lineup_stuff[,19:28], 1, function(x){sum(is.na(x))})
