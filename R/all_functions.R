@@ -480,7 +480,7 @@ scrape_game <- function(game_id) {
 
         # If these methods find more than five starters, just chooses the first five found until a better way is suggested
         # Warn user that this is being used
-        if (length(home_starters) + length(non_subs) + length(error_catch) + length(play_before_sub) > 5) {
+        if (length(unique(c(home_starters, non_subs, error_catch, play_before_sub))) > 5) {
           message(
             paste(
               "Using approximate starter finder, choosing:\n",
@@ -494,7 +494,7 @@ scrape_game <- function(game_id) {
             )
           )
           unique(c(home_starters, play_before_sub, non_subs, error_catch))[1:5]
-        } else if(length(home_starters) + length(non_subs) + length(error_catch) + length(play_before_sub) == 5){
+        } else if(length(unique(c(home_starters, non_subs, error_catch, play_before_sub))) == 5){
           unique(c(
             non_subs, home_starters, play_before_sub, error_catch
           ))
@@ -585,7 +585,7 @@ scrape_game <- function(game_id) {
           filter(!Player_1 %in% away_starters) %>%
           unlist(., use.names = F)
 
-        if (length(away_starters) + length(non_subs) + length(error_catch) + length(play_before_sub) > 5) {
+        if (length(unique(c(away_starters, non_subs, error_catch, play_before_sub))) > 5) {
           message(
             paste(
               "Using approximate starter finder, choosing:\n",
@@ -599,7 +599,7 @@ scrape_game <- function(game_id) {
             )
           )
           unique(c(away_starters, play_before_sub, non_subs, error_catch))[1:5]
-        } else if(length(away_starters) + length(non_subs) + length(error_catch) + length(play_before_sub) == 5){
+        } else if(length(unique(c(away_starters, non_subs, error_catch, play_before_sub))) == 5){
           unique(c(
             non_subs, away_starters, play_before_sub, error_catch
           ))
