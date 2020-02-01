@@ -17,4 +17,4 @@ Imports:
     XML,
     stringr,
     magrittr
-RoxygenNote: 6.1.1
+RoxygenNote: 6.1.1.9000
