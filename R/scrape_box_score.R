@@ -50,16 +50,16 @@ scrape_box_score <- function(game_id){
   tables_test[[2]] <- rbind(tables_test[[2]],new_row_two)
 
   ## First table
-  team_one_name <- read_html(url) %>% html_nodes(".header_menu+ .mytable .heading td") %>% html_text()
+  team_one_name <- read_html(url) %>% html_nodes(".header_menu+ .mytable .heading td") %>% html_text() %>% trimws()
   tables_test[[1]]$team <- rep(team_one_name,nrow(tables_test[[1]]))
   ## Second table
-  team_two_name <- read_html(url) %>% html_nodes("br+ .mytable .heading td") %>% html_text()
+  team_two_name <- read_html(url) %>% html_nodes("br+ .mytable .heading td") %>% html_text() %>% trimws()
   tables_test[[2]]$team <- rep(team_two_name,nrow(tables_test[[2]]))
   box_score_df <-  bind_rows(tables_test)
 
   box_score_df$Fouls <- as.numeric(box_score_df$Fouls)
-  box_score_df[,2:17] <-  box_score_df[,2:17] %>% mutate_all(funs(gsub('\\D+',"",.))) %>%
-    mutate_all(funs(as.numeric))
+  box_score_df[,3:17] <-  box_score_df[,3:17] %>%
+    mutate_all(list(~as.numeric(gsub('\\D+',"",.))))
 
   numeric_cols <- sapply(box_score_df, is.numeric) %>% which %>%
     names %>% setdiff(., c("id_variable", "dep_var"))
