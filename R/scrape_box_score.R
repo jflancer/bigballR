@@ -18,8 +18,6 @@
 
 scrape_box_score <- function(game_id){
   url = paste0('http://stats.ncaa.org/game/index/',game_id)
-  require(rvest)
-  require(dplyr)
 
   tables_test <- try(read_tables(url))
   if(class(tables_test) == "try-error"){
