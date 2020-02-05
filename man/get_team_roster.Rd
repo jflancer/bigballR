@@ -9,10 +9,10 @@ get_team_roster(team.id = NA, season = NA, team.name = NA)
 \arguments{
 \item{team.id}{The unique id given to each college/team for each season. This can be found in the url of the team page.}
 
-\item{season}{Alternative to using the id, you can get a team from data(ids) with a season and team name specification.
+\item{season}{Alternative to using the id, you can get a team from data(teamids) with a season and team name specification.
 String for the season stored as yyy1-y2 (2018-19 is current)}
 
-\item{team.name}{Alternative to using the id, you can get a team from data(ids) with a season and team name specification.
+\item{team.name}{Alternative to using the id, you can get a team from data(teamids) with a season and team name specification.
 This inputs a team name, to be used along with season. This needs the school name not the complete team name, so "Duke" not "Duke Blue Devils".}
 }
 \value{

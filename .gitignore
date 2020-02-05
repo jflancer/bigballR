@@ -3,3 +3,4 @@
 *.Ruserdata
 *.Rproj.user
 *.Rbuildignore
+.Rproj.user/shared/notebooks/paths
