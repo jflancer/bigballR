@@ -1931,14 +1931,14 @@ get_player_stats <-
           GS = PTS + 0.4 * FGM - 0.7 * FGA - 0.4 * (FTA - FTM) + 0.7 *
             ORB + 0.3 * DRB + STL + 0.7 * AST + 0.7 * BLK - 0.4 * PF - TOV
         ) %>%
+        dplyr::ungroup() %>%
         dplyr::mutate_if(is.numeric, round, 2) %>%
         dplyr::select(
           Player, Team, GP, MINS, POSS, FGM,
           FGA, FG., TPM, TPA, TP., FTM, FTA, FT.,
           RIMA, RIMM, RIM., TS., eFG., PBACK,
           ORB, DRB, AST, STL, BLK, TOV, PF, PTS, GS
-        ) %>%
-        dplyr::ungroup()
+        )
 
       multi_game[is.na(multi_game)] <- 0
       return(multi_game)
