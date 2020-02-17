@@ -52,7 +52,6 @@ scrape_game <- function(game_id) {
   url <- paste0(base_url, game_id)
   table <- XML::readHTMLTable(url)
 
-
   # Pull scores for each half
   half_scores <- table[[1]]
 
@@ -153,7 +152,7 @@ scrape_game <- function(game_id) {
   #Pulls the event team by looking at which entry side it comes from
   event_team <- ifelse(player1_h == player1, home_team, away_team)
 
-  # Here is where the adta is converted to a standard code
+  # Here is where the data is converted to a standard code
   if (format == "V2") {
     # Version 2 Cleaning
 
@@ -180,6 +179,9 @@ scrape_game <- function(game_id) {
     # Converts to formatting of names used in V1 which is FIRST.LAST
     players <- gsub("[^[:alnum:] ]", "", players)
     player_name <- gsub("\\s+", ".", toupper(players))
+    # Remove any notation of JR/SR/II/III from player name
+    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|JR|SR|\\.III|III|\\.II|II","", player_name)
+    player_name <- trimws(player_name)
 
     # Now getting events from left of comma
     events <-
@@ -223,6 +225,7 @@ scrape_game <- function(game_id) {
     player_name <- paste0(first, ".", last)
     player_name <-
       ifelse(substr(player_name, 1, 1) == ".", "TEAM", player_name)
+    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|JR|SR|\\.III|III|\\.II|II","", player_name)
   }
 
   # Now cleaning can ignore version
@@ -411,6 +414,7 @@ scrape_game <- function(game_id) {
                       (Time != "20:00" & Half_Status %in% 1:2) | (Time != "05:00" & Half_Status >2)
                       )$Player_1
 
+      # Find players explicitly defined as starting
       true_home_starters <- (half_data %>%
         dplyr::filter(Home == Event_Team,
                (Time == "20:00" & Half_Status %in% 1:2) | (Time == "05:00" & Half_Status >2),
@@ -428,11 +432,15 @@ scrape_game <- function(game_id) {
           }
         }
       }
+
+      # Find players explicitly defined as beginning from bench
       true_home_nonstarters <- (half_data %>%
                                dplyr::filter(Home == Event_Team,
                                              (Time == "20:00" & Half_Status %in% 1:2) | (Time == "05:00" & Half_Status >2),
                                              Event_Type == "Leaves Game"
                                ))$Player_1
+
+      # Remove defined non-starters from starters
       home_starters <- home_starters[which(!home_starters %in% true_home_nonstarters)]
       true_home_starters <- true_home_starters[which(!true_home_starters %in% home_starters)]
       home_starters <- c(home_starters, true_home_starters)
@@ -466,11 +474,12 @@ scrape_game <- function(game_id) {
           error_catch <- c(error_catch, ons[ons %in% offs])
         }
         error_catch <- error_catch[!error_catch %in% home_starters]
+
         # Looks for players that registered events but never subbed in/out, this implies they are a starter
         non_subs <-
           unique(home_split[which(!home_split$Player_1 %in% c(home_leaving, home_entering,home_starters,true_home_nonstarters)),]$Player_1)
 
-        # See if player recorded an event before subbing out at start
+        # See if player recorded an event before ever subbing out of the game
         play_before_sub <- home_split %>%
           group_by(Player_1) %>%
           filter(first(Game_Seconds) < first(.$Game_Seconds[which(.$Event_Type == "Leaves Game")])) %>%
@@ -494,16 +503,36 @@ scrape_game <- function(game_id) {
             )
           )
           unique(c(home_starters, play_before_sub, non_subs, error_catch))[1:5]
+        # If 5, checks have successfully found 5 starters
         } else if(length(unique(c(home_starters, non_subs, error_catch, play_before_sub))) == 5){
           unique(c(
             non_subs, home_starters, play_before_sub, error_catch
           ))
+        # Handle case when less than 5 starters are found even after error checks
         } else {
-          message("Not Enough Starters Found: Likely Errors In On/Off")
+          all_found <- unique(c(home_starters, play_before_sub, non_subs, error_catch))
+          # Just takes first n players that have recorded an event in the half
+          all_half_players <- half_data %>%
+            filter(Event_Team == Home,
+                   !Event_Type %in% c("Enters Game", "Leaves Game"),
+                   Player_1 != "TEAM",
+                   !Player_1 %in% all_found) %>%
+            .$Player_1 %>%
+            unlist() %>%
+            unique() %>%
+            .[1:(5-length(all_found))]
+
+          # If able to find 5 players, return them as starter and warn user
+          if(length(c(all_found, all_half_players)) == 5) {
+            message("Warning In Substitution Data - Not Enough Starters Found. Using Estimate")
+            c(all_found, all_half_players)
+          } else {
+            all_found[1:5]
+          }
         }
-    } else {
+      } else {
         home_starters[1:5]
-    }
+      }
 
       # Attempting to guess on who is on the court when a player plays the entire half and doesn't register a stat
       # Best guess I could think of was look at the last player to record a stat in prior halfs
@@ -604,7 +633,25 @@ scrape_game <- function(game_id) {
             non_subs, away_starters, play_before_sub, error_catch
           ))
         } else {
-          message("Not Enough Starters Found: Likely Errors In On/Off")
+          all_found <- unique(c(away_starters, play_before_sub, non_subs, error_catch))
+          # Just takes first n players that have recorded an event in the half
+          all_half_players <- half_data %>%
+            filter(Event_Team == Away,
+                   !Event_Type %in% c("Enters Game", "Leaves Game"),
+                   Player_1 != "TEAM",
+                   !Player_1 %in% all_found) %>%
+            .$Player_1 %>%
+            unlist() %>%
+            unique() %>%
+            .[1:(5-length(all_found))]
+
+          # If able to find 5 players, return them as starter and warn user
+          if(length(c(all_found, all_half_players)) == 5) {
+            message("Warning In Substitution Data - Not Enough Starters Found. Using Estimate")
+            c(all_found, all_half_players)
+          } else {
+            all_found[1:5]
+          }
         }
     } else {
         away_starters[1:5]
@@ -623,8 +670,8 @@ scrape_game <- function(game_id) {
       } else {
         rev(unique(prior_half$Player_1, fromLast = T))[1:numb.players]
       }
-      away_starters[is.na(away_starters)] <- players
-      message(paste("5 starters not found for half",i, "choosing",players, collapse = "/"))
+      away_starters[1:5][is.na(away_starters[1:5])] <- players
+      message(paste("5 starters not found for half", i, "choosing", players, collapse = "/"))
     }
 
       # Now an empty matrix is built that will be iterated through to store the lineups
@@ -1070,7 +1117,7 @@ get_team_schedule <-
     #   unlist(stringr::str_extract_all(html, "(?<=index/)\\d{7}(?=[?])"))
     # New code
     game_ids <-
-      unlist(stringr::str_extract_all(html, "(?<=contests/)\\d{7}(?=[/])"))
+      unlist(stringr::str_extract_all(html, "(?<=contests/)\\d+(?=[/])"))
 
     # Game IDs links to box score game id, not play by play id
     # Unfortunately need to now parse webpage for each game played to find game id
@@ -1084,13 +1131,14 @@ get_team_schedule <-
     # Have to iterate through every game for the given day and find all play by play ids on the box score page
     for (i in 1:length(url2)) {
       temp_html <- readLines(url2[i])
-      new_id <- unlist(stringr::str_extract(temp_html, "(?<=[/])\\d{7}"))
+
+      new_id <- unlist(stringr::str_extract(temp_html, "(?<=play_by_play[/])\\d+"))
       new_id <- unique(new_id[!is.na(new_id)])
       new_ids <- c(new_ids,new_id)
       Sys.sleep(0.5)
       setTxtProgressBar(pb,i)
     }
-    game_ids <- new_ids
+
     close(pb)
     message("\nParsing Schedule")
     # Handle opponent and neutral games as both are broken up using an '@' character
@@ -1155,7 +1203,8 @@ get_team_schedule <-
       Home_Score = ifelse(!is.na(home_team), opponent_score, selected_score),
       Away = ifelse(!is.na(away_team), away_team, team_name),
       Away_Score = ifelse(!is.na(away_team), opponent_score, selected_score),
-      Game_ID = c(game_ids, rep(NA, length(df$Date) - length(game_ids))),
+      Game_ID = c(new_ids, rep(NA, length(df$Date) - length(new_ids))),
+      Box_ID = c(game_ids, rep(NA, length(df$Date) - length(game_ids))),
       isNeutral = is_neutral,
       Detail = detail,
       stringsAsFactors = F
