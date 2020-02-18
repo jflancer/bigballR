@@ -2402,7 +2402,7 @@ plot_duos <- function(Lineup_Data = NA, team = NA, min_mins = 0, regressed_poss 
                   caption = "Jake Flancer (@JakeFlancer) | Data: NCAA.com") +
     ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5, size = 30),
           plot.subtitle = ggplot2::element_text(hjust = 0.5, size = 20),
-          plot.background = ggplot2::element_rect(fill = "ivory3"),
+          plot.background = ggplot2::element_rect(fill = "gray75"),
           text = ggplot2::element_text(family = "Helvetica", color = "gray25", face = "bold")) +
     ggplot2::xlim(-1,1) +
     ggplot2::ylim(-1,1)
