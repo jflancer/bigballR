@@ -103,20 +103,20 @@ plot_player_stints <- function(play_by_play_data = NA) {
     ggplot2::scale_fill_gradient2(limits = c(-max(abs(all_stints$Score_Dif)),
                                     max(abs(all_stints$Score_Dif))),
                          guide = 'none',
-                         low = "firebrick3",
-                         high = "slateblue3"
+                         low = "slateblue3",
+                         high = "firebrick3"
     ) +
     ggplot2::geom_linerange(ggplot2::aes(x=Player, ymin = Start, ymax = Stop, color = Score_Dif),
                    size = 2.4) +
-    ggplot2::geom_rect(aes(xmin = 0, xmax = Inf, ymin = -200, ymax = 0), fill = "gray28") +
+    ggplot2::geom_rect(ggplot2::aes(xmin = 0, xmax = Inf, ymin = -200, ymax = 0), fill = "gray28") +
     ggplot2::geom_text(data = player_pm, ggplot2::aes(x = Player, y = -100,
                                     label = PlusMinusLabel, color = PlusMinus),
 
               size = 5.5) +
     ggplot2::scale_color_gradient2(limits = c(-max(abs(player_pm$PlusMinus))-2,
                                      max(abs(player_pm$PlusMinus))+2),
-                          low = "firebrick3",
-                          high = "slateblue3",
+                          low = "steelblue",
+                          high = "indianred",
                           name = "Net Points"
     ) +
     ggplot2::facet_wrap(.~Team, nrow = 2, scales = "free_y", labeller = ggplot2::labeller(Team =
@@ -141,8 +141,8 @@ plot_player_stints <- function(play_by_play_data = NA) {
           panel.background = ggplot2::element_rect(fill = "gray75"),
           legend.position = c(0,-0.2),
           legend.background = ggplot2::element_rect(fill = "gray75"),
-          legend.text = ggplot2::element_text(size = 6),
-          legend.title = ggplot2::element_text(size = 8, vjust = 0.75),
+          legend.text = ggplot2::element_text(size = 8),
+          legend.title = ggplot2::element_text(size = 10, vjust = 0.75),
           legend.justification = c(0,-0.2),
           legend.direction = "horizontal",
           panel.grid = ggplot2::element_blank(),

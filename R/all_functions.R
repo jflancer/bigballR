@@ -2287,21 +2287,36 @@ plot_mins_dist <- function(play_by_play_data = NA, team = NA, threshold = NA) {
   totals <- left_join(totals, player_mins, by = c("Player", "Game_Mins"))
   totals$count[is.na(totals$count)] <- 0
 
+  totals$Player_Label <- labels <- sapply(totals$Player, function(x){
+    spl <- strsplit(x, split = "[.]")[[1]]
+    first <- paste0(substr(spl[1],1,1), tolower(substr(spl[1],2,nchar(spl[1]))))
+    last <- paste0(substr(spl[2],1,1), tolower(substr(spl[2],2,nchar(spl[2]))))
+    if(length(spl) > 2) {
+      paste(first, last, spl[3:length(spl)])
+    } else {
+      paste(first,last)
+    }
+  })
+
   totals %>%
-    dplyr::group_by(Player) %>%
+    dplyr::group_by(Player_Label) %>%
     dplyr::mutate(Total_Mins = sum(count)) %>%
     dplyr::ungroup() %>%
     dplyr::filter(Total_Mins > threshold) %>%
     ggplot2::ggplot() +
-    ggplot2::geom_tile(ggplot2::aes(reorder(Player, Total_Mins), Game_Mins, fill = count)) +
+    ggplot2::geom_tile(ggplot2::aes(reorder(Player_Label, Total_Mins), Game_Mins, fill = count)) +
     ggplot2::coord_flip() +
     ggplot2::geom_hline(yintercept = seq(0,40,by=10), linetype = "dashed", color = "darkgrey") +
     ggplot2::scale_fill_gradient2(low = "white", high = "steelblue") +
     ggplot2::labs(x = "Player", y = "Minute", fill = "GP", caption = "Jake Flancer (@JakeFlancer) | Data: NCAA.com") +
-    ggplot2::theme(panel.background = ggplot2::element_blank(),
-          axis.line = ggplot2::element_line(color = "black"),
-
-          text = ggplot2::element_text(family = "Helvetica", color = "gray25", face = "bold")) +
+    ggplot2::theme_classic() +
+    ggplot2::theme(
+      plot.background = ggplot2::element_rect(fill = "gray75"),
+      panel.background = ggplot2::element_rect(fill = "gray75"),
+      legend.background = ggplot2::element_rect(fill = "gray75"),
+      axis.line = ggplot2::element_blank(),
+      axis.ticks = ggplot2::element_blank(),
+      text = ggplot2::element_text(family = "Helvetica", color = "gray25", face = "bold")) +
     ggplot2::ggtitle(paste(team,"minutes distribution"))
 }
 
@@ -2389,21 +2404,24 @@ plot_duos <- function(Lineup_Data = NA, team = NA, min_mins = 0, regressed_poss 
     ggraph::scale_edge_colour_gradientn(breaks = scale*100,
                                colors = c("steelblue","white","indianred"),
                                labels = scale*100,
-                               name = "Adjusted Net Efficiency per 100 Possessions",
+                               name = "Adj. Net Efficiency per 100",
                                limits = c(min(scale)*100,max(scale)*100),
                                na.value = "transparent",
                                guide = ggraph::guide_edge_colorbar()) +
     ggraph::scale_edge_width(name = "Minutes Together") +
-    ggraph::geom_node_text(ggplot2::aes(label = lab), color = "black") +
+    ggraph::geom_node_text(ggplot2::aes(label = lab), color = "gray25", size = 4, fontface = "bold") +
     ggraph::geom_node_point(size = 15, alpha = 0.2, color = "gray50") +
     ggraph::theme_graph() +
     ggplot2::labs(title = paste(team, "Duos Performance"),
                   subtitle = paste("team performance when pairs of players are on the court together, min.", min_mins, "minutes"),
                   caption = "Jake Flancer (@JakeFlancer) | Data: NCAA.com") +
-    ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5, size = 30),
-          plot.subtitle = ggplot2::element_text(hjust = 0.5, size = 20),
-          plot.background = ggplot2::element_rect(fill = "gray75"),
-          text = ggplot2::element_text(family = "Helvetica", color = "gray25", face = "bold")) +
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(hjust = 0, size = 18, family = "Helvetica", color = "gray25", face = "bold"),
+      plot.subtitle = ggplot2::element_text(size = 14, family = "Helvetica", color = "gray25", face = "bold"),
+      plot.background = ggplot2::element_rect(fill = "gray75"),
+      plot.caption = ggplot2::element_text(family = "Helvetica", color = "gray25", face = "bold"),
+      legend.title = ggplot2::element_text(family = "Helvetica", color = "gray25", face = "bold")
+      ) +
     ggplot2::xlim(-1,1) +
     ggplot2::ylim(-1,1)
 }
