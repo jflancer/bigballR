@@ -6,7 +6,7 @@
 #' event. The substitution mistake warning indicates an unclean substitution was entered. (ex. 2 players enter and 1 leaves)
 #' @param  game_id string made up of digits given to each unique game. This can be found in the play-by-play url for each game.
 #' @import dplyr
-#' @import XML
+#' @importFrom XML readHTMLTable
 #' @export
 #' @return data frame containing play-by-play data for a game, where each row represents an individual event from the game.
 #' \itemize{
@@ -887,7 +887,7 @@ scrape_game <- function(game_id) {
 #' @param  date a character object containing a date in the format mm/dd/yyyy. Defaults is previous day (yesterday)
 #' @param conference the common name used for a conference, not sensitive to case, spacing, punctuation, etc.
 #' @param conference.ID alternatively, if the conference ID is known it replace the conference name variable
-#' @import XML
+#' @importFrom XML readHTMLTable
 #' @import dplyr
 #' @import stringr
 #' @return data frame with each row representing an inidividual game
@@ -1112,7 +1112,7 @@ get_date_games <-
 #' @param season Season following format yyy1-y2, ex "2018=19"
 #' @param team.name Alternative to using the id, you can get a team from data(teamids) with a season and team name specification.
 #' This inputs a team name, to be used along with season. This needs the school name not the complete team name, so "Duke" not "Duke Blue Devils".
-#' @import XML
+#' @importFrom XML readHTMLTable
 #' @import dplyr
 #' @import stringr
 #' @return data frame with each row representing an individual game
@@ -1139,7 +1139,7 @@ get_team_schedule <-
     # This can only be done since 16-17 at the moment
     if (is.na(team.id) & !is.na(team.name) & !is.na(season)) {
       team.id <-
-        teamids$ID[which(teamids$Team == team.name & teamids$Season == season)]
+        bigballR::teamids$ID[which(bigballR::teamids$Team == team.name & bigballR::teamids$Season == season)]
     } else if(is.na(team.id) & is.na(team.name) & is.na(season)){
       message("Improper Request")
       return(NULL)
@@ -1220,7 +1220,7 @@ get_team_schedule <-
       }
     }
 
-    team_name <- teamids$Team[which(teamids$ID == team.id)]
+    team_name <- bigballR::teamids$Team[which(bigballR::teamids$ID == team.id)]
 
     #This cleans the score information
     # score <- strsplit(df$Result, " - ") old
@@ -1279,7 +1279,7 @@ get_team_schedule <-
 #' String for the season stored as yyy1-y2 (2018-19 is current)
 #' @param team.name Alternative to using the id, you can get a team from data(teamids) with a season and team name specification.
 #' This inputs a team name, to be used along with season. This needs the school name not the complete team name, so "Duke" not "Duke Blue Devils".
-#' @import XML
+#' @importFrom XML readHTMLTable
 #' @import stringr
 #' @return data frame with each row representing a player on the roster
 #' \itemize{
@@ -1303,7 +1303,7 @@ get_team_roster <-
     # This can only be done since 16-17 at the moment
     if (is.na(team.id) & !is.na(team.name) & !is.na(season)) {
       team.id <-
-        teamids$ID[which(teamids$Team == team.name & teamids$Season == season)]
+        bigballR::teamids$ID[which(bigballR::teamids$Team == team.name & bigballR::teamids$Season == season)]
     } else if(is.na(team.id) & is.na(team.name) & is.na(season)){
       message("Improper Request")
       return(NULL)
@@ -1428,7 +1428,7 @@ get_lineups <-
     if (keep.dirty == F) {
       # Takes only rows from clean games or when there are errors less than the specified threshold
       lineup_stuff <- play_by_play_data %>%
-        dplyr::filter(Sub_Deviate <= error.thresh & Status == "CLEAN")
+        dplyr::filter(Sub_Deviate <= error.thresh)
 
       #Report how many rows that were deemed dirty were removed
       message(paste0(round((nrow(play_by_play_data) - nrow(lineup_stuff)) /
@@ -1469,7 +1469,7 @@ get_lineups <-
 
     # missing_players <- apply(lineup_stuff[,19:28], 2, function(x){sum(is.na(x))})
     missing_rows <- apply(lineup_stuff[,19:28], 1, function(x){sum(is.na(x))})
-    message(paste("Forced to remove", length(which(missing_rows!=0)), "rows due to missing players on courts"))
+    message(paste("Forced to remove", length(which(missing_rows!=0)), "rows due to missing players in on/off"))
 
     lineup_stuff <- lineup_stuff %>%
       filter(missing_rows==0)
@@ -1910,7 +1910,7 @@ get_player_stats <-
     }
     if (keep.dirty == F) {
       player_filtered <- play_by_play_data %>%
-        dplyr::filter(Sub_Deviate <= error.thresh & Status == "CLEAN")
+        dplyr::filter(Sub_Deviate <= error.thresh)
       if(nrow(player_filtered) != nrow(play_by_play_data)) {
         message(paste0(round((nrow(play_by_play_data) - nrow(player_filtered)) /
                                nrow(play_by_play_data), 2
@@ -2234,3 +2234,176 @@ get_mins <- function(player_filtered) {
     dplyr::ungroup()
 }
 binder <- dplyr::bind_rows
+
+#' Minutes Distribution Plot
+#'
+#' This function takes in play by play data and a team name and returns a plot
+#' showing the distributon of when each player was on the court
+#' @param pbp_data a data frame of pbp created from get_play_by_play() / scrape_game()
+#' @param team a single team name
+#' @param threshold minimum minutes played to include in plot
+#' @import dplyr
+#' @import ggplot2
+#' @export
+#' @return ggplot object containing minutes distribution
+
+plot_mins_dist <- function(play_by_play_data = NA, team = NA, threshold = NA) {
+  if(all(is.na(play_by_play_data)) | is.na(team)) {
+    stop("Missing parameters")
+  }
+
+  if(is.na(threshold)) {
+    threshold <- 0
+  }
+
+  home_team <- play_by_play_data %>%
+    dplyr::filter(Home == team) %>%
+    dplyr::select(Home,Away,Game_Seconds, Home.1:Home.5) %>%
+    dplyr::mutate(Game_Mins = Game_Seconds %/% 60)
+  away_team <- play_by_play_data %>%
+    dplyr::filter(Away == team) %>%
+    dplyr::select(Home,Away,Game_Seconds,Away.1:Away.5) %>%
+    dplyr::mutate(Game_Mins = Game_Seconds %/% 60)
+
+  all_players <- data.frame(Game_Mins = NA, Player = NA, Home = NA, Away = NA)
+  for(i in 1:5) {
+    player_row <- home_team[,c(i+3,9,1,2)]
+    colnames(player_row)[1] <- "Player"
+    all_players <- rbind(all_players, player_row)
+    player_row <- away_team[,c(i+3,9,1,2)]
+    colnames(player_row)[1] <- "Player"
+    all_players <- rbind(all_players, player_row)
+  }
+
+  player_mins <- all_players %>%
+    dplyr::group_by(Player, Game_Mins, Home, Away) %>%
+    dplyr::summarise(count = dplyr::n()) %>%
+    dplyr::group_by(Player, Game_Mins) %>%
+    dplyr::summarise(count = dplyr::n()) %>%
+    dplyr::filter(!is.na(Player), !is.na(Game_Mins))
+
+  totals <- expand.grid(unique(player_mins$Player), 0:40, stringsAsFactors = F)
+  colnames(totals) <- c("Player", "Game_Mins")
+  totals <- left_join(totals, player_mins, by = c("Player", "Game_Mins"))
+  totals$count[is.na(totals$count)] <- 0
+
+  totals %>%
+    dplyr::group_by(Player) %>%
+    dplyr::mutate(Total_Mins = sum(count)) %>%
+    dplyr::ungroup() %>%
+    dplyr::filter(Total_Mins > threshold) %>%
+    ggplot2::ggplot() +
+    ggplot2::geom_tile(ggplot2::aes(reorder(Player, Total_Mins), Game_Mins, fill = count)) +
+    ggplot2::coord_flip() +
+    ggplot2::geom_hline(yintercept = seq(0,40,by=10), linetype = "dashed", color = "darkgrey") +
+    ggplot2::scale_fill_gradient2(low = "white", high = "steelblue") +
+    ggplot2::labs(x = "Player", y = "Minute", fill = "GP", caption = "Jake Flancer (@JakeFlancer) | Data: NCAA.com") +
+    ggplot2::theme(panel.background = ggplot2::element_blank(),
+          axis.line = ggplot2::element_line(color = "black"),
+
+          text = ggplot2::element_text(family = "Helvetica", color = "gray25", face = "bold")) +
+    ggplot2::ggtitle(paste(team,"minutes distribution"))
+}
+
+#' Duo Plot
+#'
+#' Creates network plot of team ratings with players together on the court
+#' Uses empirical bayesian formula to estimate ratings relative to team average:
+#' regressed ORTG = (n_bar*r_bar_o + PTS) / (n_bar + POSS)
+#' n_bar = average possessions per lineup + regressed possessions
+#' r_bar_o = team offensive rating (PTS/POSS)*100
+#' @param lineup_data a data frame of lineups created from get_lineups()
+#' @param team a single team name
+#' @param min_mins minimum number of minutes required for duo to play together
+#' @param regressed_poss effectively number of team average possessions used to "shrink" ratings
+#' @import dplyr
+#' @import ggplot2
+#' @importFrom gtools combinations
+#' @importFrom igraph graph_from_data_frame
+#' @import ggraph
+#' @importFrom ggraph guide_edge_colourbar
+#' @export
+#' @return ggplot object of network plot
+plot_duos <- function(Lineup_Data = NA, team = NA, min_mins = 0, regressed_poss = 50) {
+  if(all(is.na(Lineup_Data)) | is.na(team)) {
+    stop("Missing Function Parameters")
+  }
+
+  lineup_data <- dplyr::filter(Lineup_Data, Team == team)
+
+  players <- unique(unlist(lineup_data[,1:5]))
+  players <- players[!is.na(players)]
+
+  labels <- sapply(players, function(x){
+    spl <- strsplit(x, split = "[.]")[[1]]
+    first <- paste0(substr(spl[1],1,1), tolower(substr(spl[1],2,nchar(spl[1]))))
+    last <- paste0(substr(spl[2],1,1), tolower(substr(spl[2],2,nchar(spl[2]))))
+    if(length(spl) > 2) {
+      paste(first, last, spl[3:length(spl)])
+    } else {
+      paste(first,last)
+    }
+  })
+
+  r_bar_o <- (sum(lineup_data$PTS) / sum(lineup_data$ePOSS))
+  r_bar_d <- (sum(lineup_data$oPTS) / sum(lineup_data$ePOSS))
+  n_bar <- mean(lineup_data$ePOSS) + regressed_poss
+
+  duos <- data.frame(gtools::combinations(n=length(players), r=2, v=players, repeats.allowed = F))
+  colnames(duos) <- c("from","to")
+  duos$mins <- NA
+  duos$ortg <- NA
+  duos$drtg <- NA
+  for(i in 1:nrow(duos)){
+    tmp <- bigballR::get_player_lineups(lineup_data, Included = unlist(unname(duos[i,1:2])))
+    duos$mins[i] <- sum(tmp$Mins)
+    duos$ortg[i] <- sum(tmp$PTS) / sum(tmp$ePOSS)
+    duos$drtg[i] <- sum(tmp$oPTS) / sum(tmp$ePOSS)
+    duos$adjortg[i] <- (n_bar*r_bar_o + sum(tmp$PTS)) / (n_bar + sum(tmp$ePOSS))
+    duos$adjdrtg[i] <- (n_bar*r_bar_d + sum(tmp$oPTS)) / (n_bar + sum(tmp$ePOSS))
+  }
+  duos[,1:2] <- apply(duos[,1:2],2,as.character)
+  duos$netrtg <- duos$ortg - duos$drtg
+  duos$adjrtg <- (duos$adjortg - duos$adjdrtg)
+
+  scale <- round(c(min(duos$adjrtg)-.02,mean(duos$adjrtg),max(duos$adjrtg)+.02),2)
+
+  dataset <- dplyr::filter(duos, mins >= min_mins)
+
+  if(nrow(dataset) <= 0) {
+    print("No Duos Found- Try Lowering Minutes")
+    return(data.frame())
+  }
+
+  final_players <- unique(unlist(dataset[,1:2]))
+
+  grph <- igraph::graph_from_data_frame(dataset,
+                                directed = F,
+                                vertices = data.frame(name = sort(final_players),
+                                                      lab = sort(labels[which(names(labels) %in% sort(final_players))]))
+  )
+
+  ggraph::ggraph(grph, layout = "linear", circular = T) +
+    ggraph::geom_edge_arc(ggplot2::aes(edge_width = mins,
+                      color = adjrtg*100)) +
+    ggraph::scale_edge_colour_gradientn(breaks = scale*100,
+                               colors = c("steelblue","white","indianred"),
+                               labels = scale*100,
+                               name = "Adjusted Net Efficiency per 100 Possessions",
+                               limits = c(min(scale)*100,max(scale)*100),
+                               na.value = "transparent",
+                               guide = ggraph::guide_edge_colorbar()) +
+    ggraph::scale_edge_width(name = "Minutes Together") +
+    ggraph::geom_node_text(ggplot2::aes(label = lab), color = "black") +
+    ggraph::geom_node_point(size = 15, alpha = 0.2, color = "gray50") +
+    ggraph::theme_graph() +
+    ggplot2::labs(title = paste(team, "Duos Performance"),
+                  subtitle = paste("team performance when pairs of players are on the court together, min.", min_mins, "minutes"),
+                  caption = "Jake Flancer (@JakeFlancer) | Data: NCAA.com") +
+    ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5, size = 30),
+          plot.subtitle = ggplot2::element_text(hjust = 0.5, size = 20),
+          plot.background = ggplot2::element_rect(fill = "ivory3"),
+          text = ggplot2::element_text(family = "Helvetica", color = "gray25", face = "bold")) +
+    ggplot2::xlim(-1,1) +
+    ggplot2::ylim(-1,1)
+}

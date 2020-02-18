@@ -4,8 +4,13 @@
 \alias{get_player_stats}
 \title{Player Stats Calculator}
 \usage{
-get_player_stats(play_by_play_data = NA, keep.dirty = F,
-  garbage.filter = F, error.thresh = 5, multi.games = F)
+get_player_stats(
+  play_by_play_data = NA,
+  keep.dirty = F,
+  garbage.filter = F,
+  error.thresh = 5,
+  multi.games = F
+)
 }
 \arguments{
 \item{play_by_play_data}{a data frame of play-by-play data from either get_play_by_play() or scrape_game()}
@@ -18,6 +23,9 @@ get_player_stats(play_by_play_data = NA, keep.dirty = F,
 
 \item{multi.games}{Logical object. When false stats will be calculated on a game level. When true all games will be aggregated
 this can be used to get season or multi-game player stats. Defaults to FALSE.}
+}
+\value{
+
 }
 \description{
 This function calculates many player stats for either individual games or aggregate to get multi-game stats.

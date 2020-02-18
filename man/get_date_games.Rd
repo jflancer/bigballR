@@ -4,8 +4,11 @@
 \alias{get_date_games}
 \title{Date Schedule Scrape}
 \usage{
-get_date_games(date = as.character(format(Sys.Date() - 1,
-  "\%m/\%d/\%Y")), conference = "All", conference.ID = NA)
+get_date_games(
+  date = as.character(format(Sys.Date() - 1, "\%m/\%d/\%Y")),
+  conference = "All",
+  conference.ID = NA
+)
 }
 \arguments{
 \item{date}{a character object containing a date in the format mm/dd/yyyy. Defaults is previous day (yesterday)}

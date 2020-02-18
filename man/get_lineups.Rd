@@ -4,8 +4,12 @@
 \alias{get_lineups}
 \title{Lineup Compiler}
 \usage{
-get_lineups(play_by_play_data = NA, keep.dirty = F,
-  garbage.filter = F, error.thresh = 5)
+get_lineups(
+  play_by_play_data = NA,
+  keep.dirty = F,
+  garbage.filter = F,
+  error.thresh = 5
+)
 }
 \arguments{
 \item{play_by_play_data}{data frame consisting of play-by-play data from the functions scrape_game() or get_play_by_play()}
@@ -61,7 +65,7 @@ data frame with each row representing a unique lineup. All stats for entire line
 \item{OEFF} - Offensive efficiency: 100 * (PTS/POSS)
 \item{DEFF} - Defensive efficiency: 100 * (oPTS/POSS)
 \item{NETEFF} - Net efficiency: OEFF - DEFF
-\item{PACE} - Time per possession: 40 x (POSS / (0.2 x Mins))
+\item{PACE} - Average time per possession (Seconds): (Possessions / Mins) * 60
 \item{ShotsPerPoss} - Estimate of shot attempts per possession: 1 + (ORB - TO) / POSS,
 }
 }

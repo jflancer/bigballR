@@ -12,7 +12,8 @@ scrape_box_score(game_id)
 Game ID can be retrived from the schedule function}
 }
 \description{
-Get Box Score Data per game
+This function will return a dataframe with the box score information as well as
+additional rows for the team totals and opponent totals for both teams.
 }
 \examples{
 
