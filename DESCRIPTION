@@ -16,5 +16,10 @@ Imports:
     dplyr,
     XML,
     stringr,
-    magrittr
+    magrittr,
+    ggplot2,
+    igraph,
+    ggraph,
+    gtools,
+    rvest
 RoxygenNote: 7.0.2
