@@ -2410,18 +2410,18 @@ plot_duos <- function(Lineup_Data = NA, team = NA, min_mins = 0, regressed_poss 
                                guide = ggraph::guide_edge_colorbar()) +
     ggraph::scale_edge_width(name = "Minutes Together") +
     ggraph::geom_node_text(ggplot2::aes(label = lab), color = "gray25", size = 4, fontface = "bold") +
-    ggraph::geom_node_point(size = 15, alpha = 0.2, color = "gray50") +
+    ggraph::geom_node_point(size = 15, alpha = 0.1, color = "gray50") +
     ggraph::theme_graph() +
     ggplot2::labs(title = paste(team, "Duos Performance"),
                   subtitle = paste("team performance when pairs of players are on the court together, min.", min_mins, "minutes"),
                   caption = "Jake Flancer (@JakeFlancer) | Data: NCAA.com") +
     ggplot2::theme(
       plot.title = ggplot2::element_text(hjust = 0, size = 18, family = "Helvetica", color = "gray25", face = "bold"),
-      plot.subtitle = ggplot2::element_text(size = 14, family = "Helvetica", color = "gray25", face = "bold"),
+      plot.subtitle = ggplot2::element_text(size = 12, family = "Helvetica", color = "gray25", face = "bold"),
       plot.background = ggplot2::element_rect(fill = "gray75"),
       plot.caption = ggplot2::element_text(family = "Helvetica", color = "gray25", face = "bold"),
       legend.title = ggplot2::element_text(family = "Helvetica", color = "gray25", face = "bold")
       ) +
-    ggplot2::xlim(-1,1) +
-    ggplot2::ylim(-1,1)
+    ggplot2::scale_x_continuous(expand = c(.15, .15), limits = c(-1,1)) +
+    ggplot2::scale_y_continuous(expand = c(.15, .15), limits = c(-1,1))
 }
