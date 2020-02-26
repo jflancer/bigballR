@@ -1684,7 +1684,7 @@ get_lineups <-
         oShotsPerPoss = 1 + (oORB - oTO) / oPOSS
       ) %>%
       #no need to have long decimals so round everything
-      dplyr::mutate_if(is.numeric, ~ round(., 2)) %>%
+      dplyr::mutate_if(is.numeric, ~ round(., 3)) %>%
       dplyr::ungroup() %>%
       # dplyr::filter(Mins > 0) %>%
       dplyr::select(P1:Team, Mins, PTS, oPTS, POSS:oShotsPerPoss, dplyr::everything()))
@@ -2013,7 +2013,7 @@ get_player_stats <-
         GS = PTS + 0.4 * FGM - 0.7 * FGA - 0.4 * (FTA - FTM) + 0.7 *
           ORB + 0.3 * DRB + STL + 0.7 * AST + 0.7 * BLK - 0.4 * PF - TOV
       ) %>%
-      dplyr::mutate_if(is.numeric, round, 2) %>%
+      dplyr::mutate_if(is.numeric, round, 3) %>%
       dplyr::select(
         ID:Player, MINS, POSS, FGM, FGA, FG.,
         TPM, TPA, TP., FTM, FTA, FT., RIMM, RIMA, RIM., MIDM, MIDA, MID.,
@@ -2043,7 +2043,7 @@ get_player_stats <-
             ORB + 0.3 * DRB + STL + 0.7 * AST + 0.7 * BLK - 0.4 * PF - TOV
         ) %>%
         dplyr::ungroup() %>%
-        dplyr::mutate_if(is.numeric, round, 2) %>%
+        dplyr::mutate_if(is.numeric, round, 3) %>%
         dplyr::select(
           Player, Team, GP, MINS, POSS, FGM, FGA, FG.,
           TPM, TPA, TP., FTM, FTA, FT., RIMM, RIMA, RIM., MIDM, MIDA, MID.,
@@ -2221,7 +2221,7 @@ get_mins <- function(player_filtered) {
       dplyr::rename(Player =  cols[i]) %>%
       dplyr::mutate(POSS = (FGA + .475 * FTA - ORB + TO + oFGA + .475 * oFTA - oORB + oTO) /
                2) %>%
-      dplyr::mutate_if(is.numeric, round, 2) %>%
+      dplyr::mutate_if(is.numeric, round, 3) %>%
       dplyr::ungroup()
     #once this is calculated add to the data frame of all player columns
     player_data <- rbind(player_data, player)
@@ -2409,7 +2409,7 @@ plot_duos <- function(Lineup_Data = NA, team = NA, min_mins = 0, regressed_poss 
                                na.value = "transparent",
                                guide = ggraph::guide_edge_colorbar()) +
     ggraph::scale_edge_width(name = "Minutes Together") +
-    ggraph::geom_node_text(ggplot2::aes(label = lab), color = "gray25", size = 4, fontface = "bold") +
+    ggraph::geom_node_text(ggplot2::aes(label = lab), color = "gray25", size = 4.5, fontface = "bold") +
     ggraph::geom_node_point(size = 15, alpha = 0.1, color = "gray50") +
     ggraph::theme_graph() +
     ggplot2::labs(title = paste(team, "Duos Performance"),
