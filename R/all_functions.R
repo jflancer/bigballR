@@ -1153,13 +1153,7 @@ get_team_schedule <-
 
     #New
     df <- df[seq(1,nrow(df), by = 2),]
-    # colnames(df) <- df[1,]
-    # df <- df[-1,]
 
-    #Get all game ids (old code)
-    # game_ids <-
-    #   unlist(stringr::str_extract_all(html, "(?<=index/)\\d{7}(?=[?])"))
-    # New code
     game_ids <-
       unlist(stringr::str_extract_all(html, "(?<=contests/)\\d+(?=[/])"))
 
@@ -1281,6 +1275,7 @@ get_team_schedule <-
 #' This inputs a team name, to be used along with season. This needs the school name not the complete team name, so "Duke" not "Duke Blue Devils".
 #' @importFrom XML readHTMLTable
 #' @import stringr
+#' @import dplyr
 #' @return data frame with each row representing a player on the roster
 #' \itemize{
 #' \item{Jersey} - Player jersey number
@@ -1319,10 +1314,24 @@ get_team_roster <-
     roster_url <- paste0("https://stats.ncaa.org", roster_link)
     #Read html for the roster page and format it so it can be usable
     html_roster <- readLines(roster_url)
-    table <-
-      data.frame(XML::readHTMLTable(html_roster)[[1]][, 1:5], stringsAsFactors = F)
+    table <- XML::readHTMLTable(html_roster)[[1]][, 1:5] %>%
+      mutate_all(as.character)
     # Return the more usable roster page
-    Sys.sleep(1)
+    player <- table$Player
+    clean_name <- sapply(strsplit(player, ","), function(x){trimws(paste(x[2],x[1]))})
+    format <- gsub("[^[:alnum:] ]", "", clean_name)
+    format <- toupper(gsub("\\s+",".", format))
+    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|JR|SR|\\.III|III|\\.II|II","", format)
+    player_name <- trimws(player_name)
+
+    table$Player <- player_name
+    table$CleanName <- clean_name
+    table$HtInches <- unname(sapply(table$Ht, function(x){
+      a = as.numeric(strsplit(x,"-")[[1]])
+      12*a[1] + a[2]
+    }))
+
+    Sys.sleep(0.5)
     return(table)
   }
 
@@ -2247,7 +2256,7 @@ binder <- dplyr::bind_rows
 #' @export
 #' @return ggplot object containing minutes distribution
 
-plot_mins_dist <- function(play_by_play_data = NA, team = NA, threshold = NA) {
+plot_mins_dist <- function(play_by_play_data = NA, team = NA, threshold = NA, split_position = F) {
   if(all(is.na(play_by_play_data)) | is.na(team)) {
     stop("Missing parameters")
   }
@@ -2287,7 +2296,7 @@ plot_mins_dist <- function(play_by_play_data = NA, team = NA, threshold = NA) {
   totals <- left_join(totals, player_mins, by = c("Player", "Game_Mins"))
   totals$count[is.na(totals$count)] <- 0
 
-  totals$Player_Label <- labels <- sapply(totals$Player, function(x){
+  labels <- sapply(totals$Player, function(x){
     spl <- strsplit(x, split = "[.]")[[1]]
     first <- paste0(substr(spl[1],1,1), tolower(substr(spl[1],2,nchar(spl[1]))))
     last <- paste0(substr(spl[2],1,1), tolower(substr(spl[2],2,nchar(spl[2]))))
@@ -2296,19 +2305,30 @@ plot_mins_dist <- function(play_by_play_data = NA, team = NA, threshold = NA) {
     } else {
       paste(first,last)
     }
-  })
+  }, USE.NAMES = F)
 
-  totals %>%
-    dplyr::group_by(Player_Label) %>%
+  if(split_position) {
+    year <- substr(first(play_by_play_data$Date),7,10)
+    season <- paste0(as.numeric(year)-1, "-", as.numeric(year)-2000)
+    roster <- get_team_roster(team.name = team, season = season)
+    totals <- left_join(totals, roster, by = "Player")
+    totals$CleanName <- paste(totals$Jersey,"-", totals$CleanName)
+  }
+
+  totals$CleanName <- ifelse(is.na(totals$CleanName), labels, totals$CleanName)
+
+
+  p <- totals %>%
+    dplyr::group_by(CleanName) %>%
     dplyr::mutate(Total_Mins = sum(count)) %>%
     dplyr::ungroup() %>%
     dplyr::filter(Total_Mins > threshold) %>%
     ggplot2::ggplot() +
-    ggplot2::geom_tile(ggplot2::aes(reorder(Player_Label, Total_Mins), Game_Mins, fill = count)) +
+    ggplot2::geom_tile(ggplot2::aes(reorder(CleanName, Total_Mins), Game_Mins, fill = count)) +
     ggplot2::coord_flip() +
     ggplot2::geom_hline(yintercept = seq(0,40,by=10), linetype = "dashed", color = "darkgrey") +
     ggplot2::scale_fill_gradient2(low = "white", high = "steelblue") +
-    ggplot2::labs(x = "Player", y = "Minute", fill = "GP", caption = "Jake Flancer (@JakeFlancer) | Data: NCAA.com") +
+    ggplot2::labs(x = "", y = "Minute", fill = "GP", caption = "Jake Flancer (@JakeFlancer) | Data: NCAA.com") +
     ggplot2::theme_classic() +
     ggplot2::theme(
       plot.background = ggplot2::element_rect(fill = "gray75"),
@@ -2318,6 +2338,14 @@ plot_mins_dist <- function(play_by_play_data = NA, team = NA, threshold = NA) {
       axis.ticks = ggplot2::element_blank(),
       text = ggplot2::element_text(family = "Helvetica", color = "gray25", face = "bold")) +
     ggplot2::ggtitle(paste(team,"minutes distribution"))
+
+  if(split_position) {
+    p +
+      ggplot2::facet_wrap(.~Pos, ncol = 1, scales = "free_y") +
+      ggplot2::theme(strip.background = ggplot2::element_blank(),
+                     strip.text = ggplot2::element_text(family = "Helvetica", color = "gray25", face = "bold"))
+  }
+
 }
 
 #' Duo Plot
