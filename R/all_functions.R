@@ -2309,14 +2309,17 @@ plot_mins_dist <- function(play_by_play_data = NA, team = NA, threshold = NA, sp
 
   if(split_position) {
     year <- substr(first(play_by_play_data$Date),7,10)
-    season <- paste0(as.numeric(year)-1, "-", as.numeric(year)-2000)
+    month <- substr(first(play_by_play_data$Date),1,2)
+    year <- ifelse(as.numeric(month)<=5, as.numeric(year)-1, year)
+
+    season <- paste0(as.numeric(year), "-", as.numeric(year)-1999)
     roster <- get_team_roster(team.name = team, season = season)
     totals <- left_join(totals, roster, by = "Player")
     totals$CleanName <- paste(totals$Jersey,"-", totals$CleanName)
   }
 
-  totals$CleanName <- ifelse(is.na(totals$CleanName), labels, totals$CleanName)
-
+  totals$CleanName <- if(is.null(totals$CleanName)) labels else totals$CleanName
+  totals$CleanName <- ifelse(totals$CleanName == "NA - NA", labels, totals$CleanName)
 
   p <- totals %>%
     dplyr::group_by(CleanName) %>%
@@ -2344,6 +2347,8 @@ plot_mins_dist <- function(play_by_play_data = NA, team = NA, threshold = NA, sp
       ggplot2::facet_wrap(.~Pos, ncol = 1, scales = "free_y") +
       ggplot2::theme(strip.background = ggplot2::element_blank(),
                      strip.text = ggplot2::element_text(family = "Helvetica", color = "gray25", face = "bold"))
+  } else {
+    p
   }
 
 }
