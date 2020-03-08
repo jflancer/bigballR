@@ -3,6 +3,7 @@
 export(get_date_games)
 export(get_lineups)
 export(get_play_by_play)
+export(get_player_combos)
 export(get_player_lineups)
 export(get_player_stats)
 export(get_team_roster)

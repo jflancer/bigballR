@@ -1842,50 +1842,56 @@ get_player_lineups <-
            Included = NA,
            Excluded = NA) {
 
-    #Figures out team that is being looked for from the vectors of players
-    find_team <- unique(
-      dplyr::filter(
-        Lineup_Data,
-        P1 %in% Included |
-          P2 %in% Included |
-          P3 %in% Included |
-          P4 %in% Included |
-          P5 %in% Included |
-          P1 %in% Excluded |
-          P2 %in% Excluded |
-          P3 %in% Excluded |
-          P4 %in% Excluded |
-          P5 %in% Excluded
-      )$Team
-    )
-    if (length(find_team) > 1) {
-      stop("ERROR- MULTIPLE TEAMS SELECTED")
+    if(any(is.na(Included)) & any(is.na(Excluded))) {
+      return(Lineup_Data)
     }
-    #get all lineups at first
-    data <- Lineup_Data %>%
-      dplyr::filter(Team == find_team)
+
+    #Figures out team that is being looked for from the vectors of players
+    # find_team <- unique(
+    #   dplyr::filter(
+    #     Lineup_Data,
+    #     P1 %in% Included |
+    #       P2 %in% Included |
+    #       P3 %in% Included |
+    #       P4 %in% Included |
+    #       P5 %in% Included |
+    #       P1 %in% Excluded |
+    #       P2 %in% Excluded |
+    #       P3 %in% Excluded |
+    #       P4 %in% Excluded |
+    #       P5 %in% Excluded
+    #   )$Team
+    # )
+    #
+    # if (length(find_team) > 1) {
+    #   stop("ERROR- MULTIPLE TEAMS SELECTED")
+    # }
+
+    # #get all lineups at first
+    # data <- Lineup_Data %>%
+    #   dplyr::filter(Team == find_team)
 
     #create variable storing whether the lineup includes/excludes correct players
-    relRow <- rep(T , nrow(data))
-    relRow2 <- rep(T , nrow(data))
+    relRow <- rep(T , nrow(Lineup_Data))
+    relRow2 <- rep(T , nrow(Lineup_Data))
     #iterates through included and finds rows that are needed
-    if (!is.na(Included[1])) {
+    if (!any(is.na(Included))) {
       for (i in 1:length(Included)) {
         relRow <-
-          relRow * apply(data, 1, function(x)
+          relRow * apply(Lineup_Data, 1, function(x)
             (Included[i] %in% x[1:5]))
       }
     }
     #iterates through rows for excluded and finds needed
-    if (!is.na(Excluded[1])) {
+    if (!any(is.na(Excluded))) {
       for (i in 1:length(Excluded)) {
         relRow2 <-
-          relRow2 * apply(data, 1, function(x)
+          relRow2 * apply(Lineup_Data, 1, function(x)
             (!Excluded[i] %in% x[1:5]))
       }
     }
     #take all rows where both cases are true
-    new_df <-data[which(relRow == 1 & relRow2 == 1),]
+    new_df <-Lineup_Data[which(relRow == 1 & relRow2 == 1),]
     return(new_df)
 }
 
@@ -2403,7 +2409,7 @@ plot_duos <- function(Lineup_Data = NA, team = NA, min_mins = 0, regressed_poss 
   duos$ortg <- NA
   duos$drtg <- NA
   for(i in 1:nrow(duos)){
-    tmp <- bigballR::get_player_lineups(lineup_data, Included = unlist(unname(duos[i,1:2])))
+    tmp <- get_player_lineups(lineup_data, Included = unlist(unname(duos[i,1:2])))
     duos$mins[i] <- sum(tmp$Mins)
     duos$ortg[i] <- sum(tmp$PTS) / sum(tmp$ePOSS)
     duos$drtg[i] <- sum(tmp$oPTS) / sum(tmp$ePOSS)
