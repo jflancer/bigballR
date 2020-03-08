@@ -17,6 +17,10 @@
 #' Get all two-man player combinations when Tre Jones is on the court
 #' get_player_combos(Lineup_Data = Duke_Lineups, n= 2, min_mins = 5, Included = "TRE.JONES")
 get_player_combos <- function(Lineup_Data = NA, n = 2, min_mins = 0, Included = NA, Excluded = NA) {
+  if(!n %in% 1:5) {
+    stop("n must be an integer from 1 and 5")
+  }
+
   # Since lineups can have multiple teams, but player combinations are team specific, separate out into team groups and then apply
   combos <- get_player_lineups(Lineup_Data, Included, Excluded) %>%
     dplyr::group_by(Team) %>%
