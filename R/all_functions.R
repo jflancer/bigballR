@@ -5,6 +5,10 @@
 #' counts displays the number of events players committed when it is found they were not on the court at the time of the
 #' event. The substitution mistake warning indicates an unclean substitution was entered. (ex. 2 players enter and 1 leaves)
 #' @param  game_id string made up of digits given to each unique game. This can be found in the play-by-play url for each game.
+#' @param use_file Boolean. If true, read from html file rather than url. File path constructed from `base_path`
+#' @param save_file Boolean. If true, save html from url to file. File path constructed from `base_path`
+#' @param base_path String. Specify base location of html file save, ex. "/Users/jake/html_files/"
+#' @param overwrite Boolean. If true, save file will overwrite an existing file at same path. Otherwise will read from existing file
 #' @import dplyr
 #' @importFrom XML readHTMLTable
 #' @export
@@ -43,14 +47,37 @@
 #' }
 #' @examples
 #' scrape_game(4674164)
-scrape_game <- function(game_id) {
+scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwrite=F) {
   #track status of cleanliness of data for game
   status <- "CLEAN"
 
-  # Gets html tables to be used
   base_url <- "http://stats.ncaa.org/game/play_by_play/"
   url <- paste0(base_url, game_id)
-  table <- XML::readHTMLTable(url)
+  file_dir <- paste0(base_path, "play_by_play/")
+  file_path <- paste0(file_dir, game_id, ".html")
+  isUrlRead <- F
+
+  # Give user option to save raw html file (to make future processing more efficient)
+  if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
+    isUrlRead <- T
+    html <- readLines(url)
+    dir.create(file_dir, recursive = T, showWarnings = F)
+    writeLines(html, file_path)
+  } else if (file.exists(file_path)) {
+    html <- readLines(file_path)
+  }
+
+  if (use_file & !is.na(base_path)) {
+    table <- XML::readHTMLTable(file_path)
+  } else {
+    isUrlRead <- T
+    table <- XML::readHTMLTable(url)
+  }
+
+  if (length(table) == 0) {
+    message("Game Not Found")
+    return(data.frame())
+  }
 
   # Pull scores for each half
   half_scores <- table[[1]]
@@ -873,8 +900,10 @@ scrape_game <- function(game_id) {
     }
     # Give user final message about the status of the game they've scraped
     message(paste(date, home_team, "v", away_team, "| ", format, "|", game_id))
-    #Sys.sleep so the ncaa server isn't overworked
-    Sys.sleep(2)
+    # Sys.sleep so the ncaa server isn't overworked
+    if(isUrlRead) {
+      Sys.sleep(2)
+    }
 
     return(clean_game)
   }
@@ -909,7 +938,10 @@ scrape_game <- function(game_id) {
 get_date_games <-
   function(date = as.character(format(Sys.Date() - 1, "%m/%d/%Y")),
            conference = "All",
-           conference.ID = NA) {
+           conference.ID = NA,
+           use_file = F,
+           save_file = F,
+           base_path = NA) {
     #First convert the character date given by user into a date object
     dateform <- as.Date(as.character(date), format = "%m/%d/%Y")
 
@@ -1017,9 +1049,23 @@ get_date_games <-
         conferenceid,
         "&commit=Submit"
       )
+    file_dir <- paste0(base_path, "date_games/")
+    file_path <- paste0(file_dir, date2, "_", conferenceid, ".html")
+
+    # Give user option to save raw html file (to make future processing more efficient)
+    if (save_file & !is.na(base_path)) {
+      html <- readLines(url)
+      dir.create(file_dir, recursive = T, showWarnings = F)
+      writeLines(html, file_path)
+    }
 
     # Reads the html and pulls the table holding the scores
-    html <- readLines(url)
+    if (use_file & !is.na(base_path)) {
+      html <- readLines(file_path)
+    } else {
+      html <- readLines(url)
+    }
+
     table <- tryCatch(XML::readHTMLTable(html)[[1]],
              error = function(e) {
                stop("No Games Table Found")
@@ -1133,7 +1179,11 @@ get_date_games <-
 get_team_schedule <-
   function(team.id = NA,
            season = NA,
-           team.name = NA) {
+           team.name = NA,
+           use_file = T,
+           save_file = T,
+           base_path = NA,
+           overwrite = F) {
 
     # If the user doesn't know id and instead gives a team name and season searches team DB for ID
     # This can only be done since 16-17 at the moment
@@ -1147,7 +1197,21 @@ get_team_schedule <-
 
     # Pull the relevant table from the team webpage
     url <- paste0("https://stats.ncaa.org/teams/", team.id)
-    html <- readLines(url)
+    file_dir <- paste0(base_path, "team_schedule/")
+    file_path <- paste0(file_dir, team.id, ".html")
+
+    if (use_file & !is.na(base_path) & file.exists(file_path)) {
+      html <- readLines(file_path)
+    } else {
+      html <- readLines(url)
+    }
+
+    # Give user option to save raw html file (to make future processing more efficient)
+    if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
+      dir.create(file_dir, recursive = T, showWarnings = F)
+      writeLines(html, file_path)
+    }
+
     tables <- XML::readHTMLTable(html)
     df <- data.frame(as.matrix(tables[[2]]), stringsAsFactors = F)
 
@@ -1168,12 +1232,29 @@ get_team_schedule <-
 
     # Have to iterate through every game for the given day and find all play by play ids on the box score page
     for (i in 1:length(url2)) {
-      temp_html <- readLines(url2[i])
+      file_dir <- paste0(base_path, "box_score/")
+      file_path <- paste0(file_dir, game_ids[i], ".html")
+      isUrlRead <- F
+
+      if (use_file & !is.na(base_path) & file.exists(file_path)) {
+        temp_html <- readLines(file_path)
+      } else {
+        isUrlRead <- T
+        temp_html <- readLines(url2[i])
+      }
+
+      # Give user option to save raw html file (to make future processing more efficient)
+      if (save_file & !is.na(base_path)) {
+        dir.create(file_dir, recursive = T, showWarnings = F)
+        writeLines(temp_html, file_path)
+      }
 
       new_id <- unlist(stringr::str_extract(temp_html, "(?<=play_by_play[/])\\d+"))
       new_id <- unique(new_id[!is.na(new_id)])
       new_ids <- c(new_ids,new_id)
-      Sys.sleep(0.5)
+      if (isUrlRead) {
+        Sys.sleep(0.5)
+      }
       setTxtProgressBar(pb,i)
     }
 
@@ -1181,11 +1262,24 @@ get_team_schedule <-
     message("\nParsing Schedule")
     # Handle opponent and neutral games as both are broken up using an '@' character
     parsed <- lapply(df$Opponent, strsplit, "@")
+    parsed <- lapply(parsed, function(x) {
+      x <- unlist(x)
+      t <- stringr::str_extract(x, "(?<=[\\#[0-9]+] ).*")
+      t[is.na(t)] <- x[is.na(t)]
+      for(j in 1:length(t)) {
+        i <- 1
+        while (!substr(t[j], 1, i) %in% bigballR::teamids$Team && i <= nchar(t[j])) {
+          i <- i + 1
+        }
+        t[j] = (substr(t[j], 1, i))
+      }
+      return(t)
+    })
+
 
     # Pulls the opponent if they are the home team
     Home <-
       lapply(parsed, function(x) {
-        x <- unlist(x)
         if (x[1] == "" & !is.na(x[2]))
           return(x[2])
       })
@@ -1193,9 +1287,9 @@ get_team_schedule <-
     # Searches for neutral game and gets location
     Neutral <-
       lapply(parsed, function(x) {
-        x <- unlist(x)
         if (length(x) == 2 & x[1] != "")
           return(x[2])
+
       })
 
     #Iterate through games and finds the home and away team
@@ -1292,7 +1386,11 @@ get_team_schedule <-
 get_team_roster <-
   function(team.id = NA,
            season = NA,
-           team.name = NA) {
+           team.name = NA,
+           use_file = F,
+           save_file = F,
+           base_path = NA,
+           overwrite = F) {
 
     # If the user doesn't know id and instead gives a team name and season searches team DB for ID
     # This can only be done since 16-17 at the moment
@@ -1306,7 +1404,27 @@ get_team_roster <-
 
     #Pull html for the team page
     url <- paste0("https://stats.ncaa.org/teams/", team.id)
-    html <- readLines(url)
+    file_dir <- paste0(base_path, "team_roster/")
+    file_path <- paste0(file_dir, team.id, ".html")
+    isUrlRead <- F
+
+    # Give user option to save raw html file (to make future processing more efficient)
+    if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
+      isUrlRead <- T
+      html <- readLines(url)
+      dir.create(file_dir, recursive = T, showWarnings = F)
+      writeLines(html, file_path)
+    } else if (file.exists(file_path)) {
+      html <- readLines(file_path)
+    }
+
+    if (use_file & !is.na(base_path)) {
+      html <- readLines(file_path)
+    } else {
+      isUrlRead <- T
+      html <- readLines(url)
+    }
+
     #Find link to the team roster page
     roster_link <- html[which(grepl("Roster", html))]
     roster_link <-
@@ -1331,9 +1449,11 @@ get_team_roster <-
       12*a[1] + a[2]
     }))
 
-    Sys.sleep(0.5)
-    return(table)
-  }
+    if (isUrlRead) {
+      Sys.sleep(0.5)
+    }
+  return(table)
+}
 
 #' Multiple Game Play-By-Play Scraper
 #'
@@ -1345,14 +1465,14 @@ get_team_roster <-
 #' get_play_by_play(c(4671170, 4674164))
 #' team_sched <- get_team_schedule(team.id = 450680)
 #' get_play_by_play(team_sched$Game_ID)
-get_play_by_play <- function(game_ids) {
+get_play_by_play <- function(game_ids, use_file = F, save_file = F, base_path = NA, overwrite=F) {
   #Cleans list of game ids to remove nas
   game_ids <- game_ids[!is.na(game_ids)]
   #Scrape all game ids into list
 
-  game_list <- lapply(game_ids, function(x){
+  game_list <- lapply(game_ids, function(x) {
     # Add error handling so if one game throws an error it will report and continue iterating
-    tryCatch(scrape_game(x), error = function(e){
+    tryCatch(scrape_game(x, use_file = use_file, save_file = save_file, base_path = base_path, overwrite=overwrite), error = function(e){
       print(paste0("Error with game id: ", x, " // ", e))
       return(NA)
     })
