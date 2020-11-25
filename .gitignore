@@ -4,3 +4,5 @@
 *.Rproj.user
 *.Rbuildignore
 .Rproj.user/shared/notebooks/paths
+.Rproj.user
+.DS_Store
