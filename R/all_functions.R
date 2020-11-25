@@ -948,6 +948,9 @@ get_date_games <-
     # Find the season id needed by the url given the date of the game
     # The pbp only goes back to 2011 in most cases, so no need to pull deeper
     seasonid <- case_when(
+      # 20-21
+      dateform > as.Date("2012-05-01") &
+        dateform <= as.Date("2021-05-01") ~ 17420,
       # 19-20
       dateform > as.Date("2019-05-01") &
         dateform <= as.Date("2020-05-01") ~ 17060,
@@ -1152,8 +1155,7 @@ get_date_games <-
 #' Team Schedule Scrape
 #'
 #' This function returns a data frame of the schedule for the specified team. This will include game ids used
-#' for play-by-play scraping if the game has ended, along with the team scores and attendance. Note: currently,
-#' the season/team.name parameters can only be used for the 2016-17, 2017-18, 2018-19 seasons
+#' for play-by-play scraping if the game has ended, along with the team scores and attendance.
 #' @param team.id The unique id given to each college/team for each season. This can be found in the url of the team page.
 #' @param season Season following format yyy1-y2, ex "2018=19"
 #' @param team.name Alternative to using the id, you can get a team from data(teamids) with a season and team name specification.
@@ -1360,8 +1362,7 @@ get_team_schedule <-
 #' Team Roster Scrape
 #'
 #' This function returns a data frame of the roster for the specified team. This will include player names and positions
-#' as well as jersey number, height and school year. Note: currently,
-#' the season/team.name parameters can only be used for the 2016-17, 2017-18, 2018-19 seasons
+#' as well as jersey number, height and school year.
 #' @param team.id The unique id given to each college/team for each season. This can be found in the url of the team page.
 #' @param season Alternative to using the id, you can get a team from data(teamids) with a season and team name specification.
 #' String for the season stored as yyy1-y2 (2018-19 is current)
