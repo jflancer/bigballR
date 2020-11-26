@@ -1268,13 +1268,16 @@ get_team_schedule <-
       x <- unlist(x)
       t <- stringr::str_extract(x, "(?<=[\\#[0-9]+] ).*")
       t[is.na(t)] <- x[is.na(t)]
-      for(j in 1:length(t)) {
-        i <- 1
-        while (!substr(t[j], 1, i) %in% bigballR::teamids$Team && i <= nchar(t[j])) {
-          i <- i + 1
+      if(!any(trimws(t) %in% bigballR::teamids$Team)) {
+        for(j in 1:length(t)) {
+          i <- 1
+          while (!substr(t[j], 1, i) %in% bigballR::teamids$Team && i <= nchar(t[j])) {
+            i <- i + 1
+          }
+          t[j] = substr(t[j], 1, i)
         }
-        t[j] = (substr(t[j], 1, i))
       }
+
       return(t)
     })
 
