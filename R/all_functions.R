@@ -2703,7 +2703,7 @@ scrape_box <-
 #' @export
 #' @examples
 #' get_box_scores(c(1982642, 1982641))
-get_box_scores <- function(game_ids, use_file = F, save_file = F, base_path = NA, overwrite=F) {
+get_box_scores <- function(game_ids, multi.games = F, use_file = F, save_file = F, base_path = NA, overwrite=F) {
   #Cleans list of game ids to remove nas
   game_ids <- game_ids[!is.na(game_ids)]
   #Scrape all game ids into list
@@ -2723,6 +2723,28 @@ get_box_scores <- function(game_ids, use_file = F, save_file = F, base_path = NA
   game_data <- do.call("binder", game_list)
   if(length(dirty_ind) != 0) {
     message(paste(paste(game_ids[dirty_ind], collapse = ","), "removed"))
+  }
+
+  game_data <- game_data %>%
+    mutate(
+      MP = round(as.numeric(gsub(":(.*)", "", MP)) + as.numeric(gsub("(.*):", "", MP))/60, 1),
+    )
+
+  if (multi.games == T) {
+    multi_game <- game_data %>%
+      dplyr::mutate(across(all_of(c("MP", "G", "FGM", "FGA", "TPM", "TPA", "FTM", "FTA", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "Fouls", "DQ", "Tech")), as.numeric)) %>%
+      dplyr::mutate(across(where(is.numeric), function(x){x[is.na(x)] <- 0; return(x)})) %>%
+      dplyr::group_by(Player, Team, Pos) %>%
+      dplyr::summarise_if(is.numeric, sum) %>%
+      dplyr::mutate(
+        FG. = FGM / FGA,
+        TP. = TPM / TPA,
+        FT. = FTM / FTA,
+        TS. = (PTS / 2) / (FGA + .475 * FTA),
+        eFG. = (FGM + 0.5 * TPM) / FGA) %>%
+      dplyr::mutate(across(where(is.numeric), function(x){x[is.nan(x)] <- 0; return(x)}))
+
+      return(multi_game)
   }
 
   return(game_data)
