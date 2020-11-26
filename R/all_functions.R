@@ -1405,7 +1405,7 @@ get_team_roster <-
 
     #Pull html for the team page
     url <- paste0("https://stats.ncaa.org/teams/", team.id)
-    file_dir <- paste0(base_path, "team_roster/")
+    file_dir <- paste0(base_path, "team_schedule/")
     file_path <- paste0(file_dir, team.id, ".html")
     isUrlRead <- F
 
@@ -1431,13 +1431,32 @@ get_team_roster <-
     roster_link <-
       stringr::str_extract_all(roster_link, "(?<=\\\")(.*)(?=[\\\"])")
     roster_url <- paste0("https://stats.ncaa.org", roster_link)
-    #Read html for the roster page and format it so it can be usable
-    html_roster <- readLines(roster_url)
+    #Read html for the roster page and format it so it can be usabl
+
+    file_dir <- paste0(base_path, "team_roster/")
+    file_path <- paste0(file_dir, team.id, ".html")
+
+    if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
+      isUrlRead <- T
+      html <- readLines(roster_url)
+      dir.create(file_dir, recursive = T, showWarnings = F)
+      writeLines(html, file_path)
+    } else if (file.exists(file_path)) {
+      html <- readLines(file_path)
+    }
+
+    if (use_file & !is.na(base_path)) {
+      html <- readLines(file_path)
+    } else {
+      isUrlRead <- T
+      html <- readLines(roster_url)
+    }
+
     table <- XML::readHTMLTable(html_roster)[[1]][, 1:5] %>%
       mutate_all(as.character)
     # Return the more usable roster page
     player <- table$Player
-    clean_name <- sapply(strsplit(player, ","), function(x){trimws(paste(x[2],x[1]))})
+    clean_name <- sapply(strsplit(table$Player, ","), function(x){trimws(paste(x[length(x)],x[1]))})
     format <- gsub("[^[:alnum:] ]", "", clean_name)
     format <- toupper(gsub("\\s+",".", format))
     player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|JR|SR|\\.III|III|\\.II|II","", format)
@@ -2586,6 +2605,17 @@ plot_duos <- function(Lineup_Data = NA, team = NA, min_mins = 0, regressed_poss 
     ggplot2::scale_y_continuous(expand = c(.15, .15), limits = c(-1,1))
 }
 
+
+#' Box Score Scrape
+#'
+#' This function returns a box score for the given game
+#' @param  game_id box id for the game
+#' @importFrom XML readHTMLTable
+#' @import dplyr
+#' @return data frame with each row representing a player in the game
+#' @export
+#' @examples
+#' scrape_box(1982642)
 scrape_box <-
   function(game_id,
            use_file = F,
@@ -2659,6 +2689,14 @@ scrape_box <-
     return(final)
 }
 
+#' Box Scores Scrape
+#'
+#' This function returns a single data frame for a vector of box ids. A wrapping of scrape_box for multiple games
+#' @param  game_id vector of box ids for the game
+#' @return data frame with each row representing a player in the game
+#' @export
+#' @examples
+#' get_box_scores(c(1982642, 1982641))
 get_box_scores <- function(game_ids, use_file = F, save_file = F, base_path = NA, overwrite=F) {
   #Cleans list of game ids to remove nas
   game_ids <- game_ids[!is.na(game_ids)]

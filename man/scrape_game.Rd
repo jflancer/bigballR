@@ -4,10 +4,24 @@
 \alias{scrape_game}
 \title{Individual Game Play-By-Play Scraper}
 \usage{
-scrape_game(game_id)
+scrape_game(
+  game_id,
+  save_file = F,
+  use_file = F,
+  base_path = NA,
+  overwrite = F
+)
 }
 \arguments{
 \item{game_id}{string made up of digits given to each unique game. This can be found in the play-by-play url for each game.}
+
+\item{save_file}{Boolean. If true, save html from url to file. File path constructed from `base_path`}
+
+\item{use_file}{Boolean. If true, read from html file rather than url. File path constructed from `base_path`}
+
+\item{base_path}{String. Specify base location of html file save, ex. "/Users/jake/html_files/"}
+
+\item{overwrite}{Boolean. If true, save file will overwrite an existing file at same path. Otherwise will read from existing file}
 }
 \value{
 data frame containing play-by-play data for a game, where each row represents an individual event from the game.

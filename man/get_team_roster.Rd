@@ -4,7 +4,15 @@
 \alias{get_team_roster}
 \title{Team Roster Scrape}
 \usage{
-get_team_roster(team.id = NA, season = NA, team.name = NA)
+get_team_roster(
+  team.id = NA,
+  season = NA,
+  team.name = NA,
+  use_file = F,
+  save_file = F,
+  base_path = NA,
+  overwrite = F
+)
 }
 \arguments{
 \item{team.id}{The unique id given to each college/team for each season. This can be found in the url of the team page.}
@@ -27,8 +35,7 @@ data frame with each row representing a player on the roster
 }
 \description{
 This function returns a data frame of the roster for the specified team. This will include player names and positions
-as well as jersey number, height and school year. Note: currently,
-the season/team.name parameters can only be used for the 2016-17, 2017-18, 2018-19 seasons
+as well as jersey number, height and school year.
 }
 \examples{
 get_team_roster(team.id = 450680)
