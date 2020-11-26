@@ -2116,10 +2116,10 @@ get_player_stats <-
         RIMM = sum((
           Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In") * (Event_Result == "made")
         ), na.rm = T),
-        PBACKA = sum((Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")) * (lag(Event_Type) == "Offensive Rebound") * (lag(Player_1) == Player_1),
+        PBACKA = sum((Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")) * (lag(Event_Type) == "Offensive Rebound"),
                      na.rm = T
         ),
-        PBACKM = sum((Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")) * (Event_Result == "made") * (lag(Event_Type) == "Offensive Rebound") * (lag(Player_1) == Player_1),
+        PBACKM = sum((Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")) * (Event_Result == "made") * (lag(Event_Type) == "Offensive Rebound"),
                     na.rm = T
         ),
         FTA = sum((Shot_Value == 1), na.rm = T),
@@ -2129,7 +2129,8 @@ get_player_stats <-
         TOV = sum((Event_Type == "Turnover"), na.rm = T),
         STL = sum((Event_Type == "Steal"), na.rm = T),
         BLK = sum((Event_Type == "Blocked Shot"), na.rm = T),
-        PF = sum((Event_Type == "Commits Foul"), na.rm = T)
+        PF = sum((Event_Type == "Commits Foul"), na.rm = T),
+        .groups = "drop"
       ) %>%
       dplyr::filter(Player_1 != "TEAM") %>%
       dplyr::rename(Player = Player_1,
@@ -2139,7 +2140,7 @@ get_player_stats <-
     # Can then count assists form player 2 column
     assist_stats <- player_filtered %>%
       dplyr::group_by(ID, Player_2) %>%
-      dplyr::summarise(AST = n()) %>%
+      dplyr::summarise(AST = n(), .groups = "drop") %>%
       dplyr::rename(Player = Player_2) %>%
       dplyr::ungroup()
 
@@ -2175,7 +2176,7 @@ get_player_stats <-
         TS., eFG., PBACKM, PBACKA, PBACK., ORB, DRB, AST, STL, BLK, TOV,
         PF, PTS, GS
       )
-    final_stats[is.na(final_stats)] <- 0
+    final_stats[,7:37][is.na(final_stats[,7:37])] <- 0
 
     # User has option to aggregate game stats into player stats over all games in play by play
     # This essentially does the same processes as above but changes the grouping to exclude game specific ids
@@ -2370,7 +2371,8 @@ get_mins <- function(player_filtered) {
                    na.rm = T
         ),
         FTA = sum((Shot_Value == 1) * (Event_Team == Away) * 1, na.rm = T),
-        oFTA = sum((Shot_Value == 1) * (Event_Team == Home) * 1, na.rm = T)
+        oFTA = sum((Shot_Value == 1) * (Event_Team == Home) * 1, na.rm = T),
+        .groups = "drop"
       ) %>%
       dplyr::ungroup() %>%
       dplyr::rename(Player =  cols[i]) %>%
@@ -2385,7 +2387,8 @@ get_mins <- function(player_filtered) {
   final_df <- player_data %>%
     dplyr::group_by(Player, ID) %>%
     dplyr::summarise(MINS = sum(Mins),
-              POSS = ceiling(sum(POSS))) %>%
+              POSS = ceiling(sum(POSS)),
+              .groups = "drop") %>%
     dplyr::ungroup()
 }
 binder <- dplyr::bind_rows
