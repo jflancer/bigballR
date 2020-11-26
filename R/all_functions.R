@@ -1456,7 +1456,7 @@ get_team_roster <-
     }
 
     table <- XML::readHTMLTable(html)[[1]][, 1:5] %>%
-      mutate_all(as.character)
+      mutate(across(everything(), as.character))
     # Return the more usable roster page
     player <- table$Player
     clean_name <- sapply(strsplit(table$Player, ","), function(x){trimws(paste(x[length(x)],x[1]))})
