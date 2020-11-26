@@ -2585,3 +2585,101 @@ plot_duos <- function(Lineup_Data = NA, team = NA, min_mins = 0, regressed_poss 
     ggplot2::scale_x_continuous(expand = c(.15, .15), limits = c(-1,1)) +
     ggplot2::scale_y_continuous(expand = c(.15, .15), limits = c(-1,1))
 }
+
+scrape_box <-
+  function(game_id,
+           use_file = F,
+           save_file = F,
+           base_path = NA,
+           overwrite = F) {
+
+    status <- "CLEAN"
+
+    url <- paste0("https://stats.ncaa.org/contests/", game_id,"/box_score")
+    file_dir <- paste0(base_path, "box_score/")
+    file_path <- paste0(file_dir, game_id, ".html")
+    isUrlRead <- F
+
+    # Give user option to save raw html file (to make future processing more efficient)
+    if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
+      isUrlRead <- T
+      html <- readLines(url)
+      dir.create(file_dir, recursive = T, showWarnings = F)
+      writeLines(html, file_path)
+    } else if (file.exists(file_path)) {
+      html <- readLines(file_path)
+    }
+
+    if (use_file & !is.na(base_path)) {
+      table <- XML::readHTMLTable(file_path)
+    } else {
+      isUrlRead <- T
+      table <- XML::readHTMLTable(url)
+    }
+
+    if (length(table) == 0) {
+      message("Game Not Found")
+      return(data.frame())
+    }
+
+    background <- table[[1]]
+
+    away <- table[[5]]
+    colnames(away) <- away[1,]
+    away <- away[2:(nrow(away)-1),]
+    away$Team <- background[1,1]
+
+    home <- table[[6]]
+    colnames(home) <- home[1,]
+    home <- home[2:(nrow(home)-1),]
+    home$Team <- background[2,1]
+
+    box <- bind_rows(home, away)
+
+    clean_name <- sapply(strsplit(box$Player, ","), function(x){trimws(paste(x[length(x)],x[1]))})
+    format <- gsub("[^[:alnum:] ]", "", clean_name)
+    format <- toupper(gsub("\\s+",".", format))
+    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|JR|SR|\\.III|III|\\.II|II","", format)
+    player_name <- trimws(player_name)
+
+    box$CleanName <- clean_name
+    box$Player <- player_name
+    box$Game_ID <- game_id
+
+    final <- box %>%
+      rename("TPM" = "3FG", "TPA" = "3FGA", "FTM" = "FT", "ORB" = "ORebs", "DRB" = "DRebs", "TRB" = "Tot Reb", "Tech" = "Tech Fouls") %>%
+      select(Game_ID, Team, Player, everything()) %>%
+      filter(Player != "TEAM.TEAM")
+
+    if(isUrlRead) {
+      Sys.sleep(2)
+    }
+
+    message(paste(background[2,1], "v", background[1,1], "|", game_id))
+    return(final)
+}
+
+get_box_scores <- function(game_ids, use_file = F, save_file = F, base_path = NA, overwrite=F) {
+  #Cleans list of game ids to remove nas
+  game_ids <- game_ids[!is.na(game_ids)]
+  #Scrape all game ids into list
+
+  game_list <- lapply(game_ids, function(x) {
+    # Add error handling so if one game throws an error it will report and continue iterating
+    tryCatch(scrape_box(x, use_file = use_file, save_file = save_file, base_path = base_path, overwrite=overwrite), error = function(e){
+      print(paste0("Error with game id: ", x, " // ", e))
+      return(NA)
+    })
+  })
+
+  dirty_ind <- which(is.na(game_list))
+  #Remove any incorrect games found
+  if(length(dirty_ind) > 0) game_list <- game_list[-dirty_ind]
+  #Bind rows together and return combined dataframe
+  game_data <- do.call("binder", game_list)
+  if(length(dirty_ind) != 0) {
+    message(paste(paste(game_ids[dirty_ind], collapse = ","), "removed"))
+  }
+
+  return(game_data)
+}
