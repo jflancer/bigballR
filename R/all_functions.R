@@ -1452,7 +1452,7 @@ get_team_roster <-
       html <- readLines(roster_url)
     }
 
-    table <- XML::readHTMLTable(html_roster)[[1]][, 1:5] %>%
+    table <- XML::readHTMLTable(html)[[1]][, 1:5] %>%
       mutate_all(as.character)
     # Return the more usable roster page
     player <- table$Player
