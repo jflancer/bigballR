@@ -2351,7 +2351,7 @@ get_mins <- function(player_filtered) {
     #group by the given player column in iteration
     #calculate stats needed to get the players minutes and possessions on the court for
     player <- player_filtered %>%
-      dplyr::group_by_at(vars(cols[i], "ID")) %>%
+      dplyr::group_by_at(c(cols[i], "ID")) %>%
       dplyr::summarise(
         Mins = sum(Event_Length, na.rm = T) / 60,
         FGA = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Home) *
