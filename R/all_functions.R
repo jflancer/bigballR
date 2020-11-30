@@ -60,7 +60,9 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
   # Give user option to save raw html file (to make future processing more efficient)
   if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
     isUrlRead <- T
-    html <- readLines(con = url(url_text, headers = c("User-Agent" = "My Custom User Agent")))
+    file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+    html <- readLines(con = file_url)
+    close(file_url)
     dir.create(file_dir, recursive = T, showWarnings = F)
     writeLines(html, file_path)
   } else if (file.exists(file_path)) {
@@ -1057,7 +1059,10 @@ get_date_games <-
 
     # Give user option to save raw html file (to make future processing more efficient)
     if (save_file & !is.na(base_path)) {
-      html <- readLines(con = url(url_text, headers = c("User-Agent" = "My Custom User Agent")))
+      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      html <- readLines(con = file_url)
+      close(file_url)
+
       dir.create(file_dir, recursive = T, showWarnings = F)
       writeLines(html, file_path)
     }
@@ -1066,7 +1071,9 @@ get_date_games <-
     if (use_file & !is.na(base_path)) {
       html <- readLines(file_path)
     } else {
-      html <- readLines(con = url(url_text, headers = c("User-Agent" = "My Custom User Agent")))
+      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      html <- readLines(con = file_url)
+      close(file_url)
     }
 
     table <- tryCatch(XML::readHTMLTable(html)[[1]],
@@ -1139,7 +1146,9 @@ get_date_games <-
     # Have to iterate through every game for the given day and find all play by play ids on the box score page
     if(length(game_ids)>0){
       for (i in 1:length(url2)) {
-        temp_html <- readLines(con = url(url2[i], headers = c("User-Agent" = "My Custom User Agent")))
+        file_url <- url(url2[i], headers = c("User-Agent" = "My Custom User Agent"))
+        temp_html <- readLines(con = file_url)
+        close(file_url)
         new_id <- unlist(stringr::str_extract(temp_html, "(?<=play_by_play/)\\d+"))
         new_id <- unique(new_id[!is.na(new_id)])
         game_data$GameID[i] <- new_id
@@ -1205,7 +1214,7 @@ get_team_schedule <-
     if (use_file & !is.na(base_path) & file.exists(file_path)) {
       html <- readLines(file_path)
     } else {
-      html <- readLines(con = url(url_text, headers = c("User-Agent" = "My Custom User Agent")))
+
     }
 
     # Give user option to save raw html file (to make future processing more efficient)
@@ -1242,7 +1251,9 @@ get_team_schedule <-
         temp_html <- readLines(file_path)
       } else {
         isUrlRead <- T
-        temp_html <- readLines(con = url(url2[i], headers = c("User-Agent" = "My Custom User Agent")))
+        file_url <- url(url2[i], headers = c("User-Agent" = "My Custom User Agent"))
+        temp_html <- readLines(con = file_url)
+        close(file_url)
       }
 
       # Give user option to save raw html file (to make future processing more efficient)
@@ -1423,7 +1434,9 @@ get_team_roster <-
     # Give user option to save raw html file (to make future processing more efficient)
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
       isUrlRead <- T
-      html <- readLines(con = url(url_text, headers = c("User-Agent" = "My Custom User Agent")))
+      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      html <- readLines(con = file_url)
+      close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
       writeLines(html, file_path)
     } else if (file.exists(file_path)) {
@@ -1434,7 +1447,9 @@ get_team_roster <-
       html <- readLines(file_path)
     } else {
       isUrlRead <- T
-      html <- readLines(con = url(url_text, headers = c("User-Agent" = "My Custom User Agent")))
+      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      html <- readLines(con = file_url)
+      close(file_url)
     }
 
     #Find link to the team roster page
@@ -1449,7 +1464,9 @@ get_team_roster <-
 
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
       isUrlRead <- T
-      html <- readLines(con = url(roster_url, headers = c("User-Agent" = "My Custom User Agent")))
+      file_url <- url(roster_url, headers = c("User-Agent" = "My Custom User Agent"))
+      html <- readLines(con = file_url)
+      close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
       writeLines(html, file_path)
     } else if (file.exists(file_path)) {
@@ -1460,7 +1477,9 @@ get_team_roster <-
       html <- readLines(file_path)
     } else {
       isUrlRead <- T
-      html <- readLines(con = url(roster_url, headers = c("User-Agent" = "My Custom User Agent")))
+      file_url <- url(roster_url, headers = c("User-Agent" = "My Custom User Agent"))
+      html <- readLines(con = file_url)
+      close(file_url)
     }
 
     table <- XML::readHTMLTable(html)[[1]][, 1:5] %>%
@@ -2647,7 +2666,9 @@ scrape_box <-
     # Give user option to save raw html file (to make future processing more efficient)
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
       isUrlRead <- T
-      html <- readLines(con = url(url_text, headers = c("User-Agent" = "My Custom User Agent")))
+      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      html <- readLines(con = file_url)
+      close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
       writeLines(html, file_path)
     } else if (file.exists(file_path)) {
