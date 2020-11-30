@@ -52,7 +52,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
   status <- "CLEAN"
 
   base_url <- "http://stats.ncaa.org/game/play_by_play/"
-  url <- paste0(base_url, game_id)
+  url_text <- paste0(base_url, game_id)
   file_dir <- paste0(base_path, "play_by_play/")
   file_path <- paste0(file_dir, game_id, ".html")
   isUrlRead <- F
@@ -60,7 +60,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
   # Give user option to save raw html file (to make future processing more efficient)
   if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
     isUrlRead <- T
-    html <- readLines(url)
+    html <- readLines(con = url(url_text, headers = c("User-Agent" = "My Custom User Agent")))
     dir.create(file_dir, recursive = T, showWarnings = F)
     writeLines(html, file_path)
   } else if (file.exists(file_path)) {
@@ -71,7 +71,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     table <- XML::readHTMLTable(file_path)
   } else {
     isUrlRead <- T
-    table <- XML::readHTMLTable(url)
+    table <- XML::readHTMLTable(url_text)
   }
 
   if (length(table) == 0) {
@@ -1042,9 +1042,9 @@ get_date_games <-
     date2 <- gsub("[/]", "%2F", date)
 
     #pulls the necessary url
-    url <-
+    url_text <-
       paste0(
-        "https://stats.ncaa.org/season_divisions/",
+        "http://stats.ncaa.org/season_divisions/",
         seasonid,
         "/scoreboards?game_date=",
         date2,
@@ -1057,7 +1057,7 @@ get_date_games <-
 
     # Give user option to save raw html file (to make future processing more efficient)
     if (save_file & !is.na(base_path)) {
-      html <- readLines(url)
+      html <- readLines(con = url(url_text, headers = c("User-Agent" = "My Custom User Agent")))
       dir.create(file_dir, recursive = T, showWarnings = F)
       writeLines(html, file_path)
     }
@@ -1066,7 +1066,7 @@ get_date_games <-
     if (use_file & !is.na(base_path)) {
       html <- readLines(file_path)
     } else {
-      html <- readLines(url)
+      html <- readLines(con = url(url_text, headers = c("User-Agent" = "My Custom User Agent")))
     }
 
     table <- tryCatch(XML::readHTMLTable(html)[[1]],
@@ -1104,7 +1104,7 @@ get_date_games <-
     # As a result, this function needs to convert from boxscore to pbp but as a result be slower
     # Need to read each box score page and find link to pbp page
     url2 <-
-      paste0("https://stats.ncaa.org/contests/", game_ids, "/box_score")
+      paste0("http://stats.ncaa.org/contests/", game_ids, "/box_score")
 
     # Clean team names
     home_name = gsub(" [(].*[)]","", home_team)
@@ -1139,7 +1139,7 @@ get_date_games <-
     # Have to iterate through every game for the given day and find all play by play ids on the box score page
     if(length(game_ids)>0){
       for (i in 1:length(url2)) {
-        temp_html <- readLines(url2[i])
+        temp_html <- readLines(con = url(url2[i], headers = c("User-Agent" = "My Custom User Agent")))
         new_id <- unlist(stringr::str_extract(temp_html, "(?<=play_by_play/)\\d+"))
         new_id <- unique(new_id[!is.na(new_id)])
         game_data$GameID[i] <- new_id
@@ -1198,14 +1198,14 @@ get_team_schedule <-
     }
 
     # Pull the relevant table from the team webpage
-    url <- paste0("https://stats.ncaa.org/teams/", team.id)
+    url_text <- paste0("http://stats.ncaa.org/teams/", team.id)
     file_dir <- paste0(base_path, "team_schedule/")
     file_path <- paste0(file_dir, team.id, ".html")
 
     if (use_file & !is.na(base_path) & file.exists(file_path)) {
       html <- readLines(file_path)
     } else {
-      html <- readLines(url)
+      html <- readLines(con = url(url_text, headers = c("User-Agent" = "My Custom User Agent")))
     }
 
     # Give user option to save raw html file (to make future processing more efficient)
@@ -1226,7 +1226,7 @@ get_team_schedule <-
     # Game IDs links to box score game id, not play by play id
     # Unfortunately need to now parse webpage for each game played to find game id
     url2 <-
-      paste0("https://stats.ncaa.org/contests/", game_ids, "/box_score")
+      paste0("http://stats.ncaa.org/contests/", game_ids, "/box_score")
 
     new_ids <- c()
     message("Compiling Game IDs")
@@ -1242,7 +1242,7 @@ get_team_schedule <-
         temp_html <- readLines(file_path)
       } else {
         isUrlRead <- T
-        temp_html <- readLines(url2[i])
+        temp_html <- readLines(con = url(url2[i], headers = c("User-Agent" = "My Custom User Agent")))
       }
 
       # Give user option to save raw html file (to make future processing more efficient)
@@ -1333,6 +1333,14 @@ get_team_schedule <-
       unname(sapply(opponent_score, function(x)
         strsplit(x, " \\(")[[1]][1]))
 
+    detail <- ifelse(selected_score %in% c("Canceled", "Ppd"), selected_score, detail)
+    selected_score <- ifelse(selected_score %in% c("Canceled", "Ppd"), NA, selected_score)
+
+    pbp_ids <- selected_score
+    pbp_ids[which(!is.na(pbp_ids))] <- if(length(new_ids)>0) new_ids else NA
+    box_ids <- selected_score
+    box_ids[which(!is.na(box_ids))] <- if(length(game_ids)>0) game_ids else NA
+
     #Put everything together into tidy data frame
     team_data <- data.frame(
       Date = df$Date,
@@ -1340,8 +1348,8 @@ get_team_schedule <-
       Home_Score = ifelse(!is.na(home_team), opponent_score, selected_score),
       Away = ifelse(!is.na(away_team), away_team, team_name),
       Away_Score = ifelse(!is.na(away_team), opponent_score, selected_score),
-      Game_ID = c(new_ids, rep(NA, length(df$Date) - length(new_ids))),
-      Box_ID = c(game_ids, rep(NA, length(df$Date) - length(game_ids))),
+      Game_ID = pbp_ids,
+      Box_ID = box_ids,
       isNeutral = is_neutral,
       Detail = detail,
       stringsAsFactors = F
@@ -1407,7 +1415,7 @@ get_team_roster <-
     }
 
     #Pull html for the team page
-    url <- paste0("https://stats.ncaa.org/teams/", team.id)
+    url_text <- paste0("http://stats.ncaa.org/teams/", team.id)
     file_dir <- paste0(base_path, "team_schedule/")
     file_path <- paste0(file_dir, team.id, ".html")
     isUrlRead <- F
@@ -1415,7 +1423,7 @@ get_team_roster <-
     # Give user option to save raw html file (to make future processing more efficient)
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
       isUrlRead <- T
-      html <- readLines(url)
+      html <- readLines(con = url(url_text, headers = c("User-Agent" = "My Custom User Agent")))
       dir.create(file_dir, recursive = T, showWarnings = F)
       writeLines(html, file_path)
     } else if (file.exists(file_path)) {
@@ -1426,14 +1434,14 @@ get_team_roster <-
       html <- readLines(file_path)
     } else {
       isUrlRead <- T
-      html <- readLines(url)
+      html <- readLines(con = url(url_text, headers = c("User-Agent" = "My Custom User Agent")))
     }
 
     #Find link to the team roster page
     roster_link <- html[which(grepl("Roster", html))]
     roster_link <-
       stringr::str_extract_all(roster_link, "(?<=\\\")(.*)(?=[\\\"])")
-    roster_url <- paste0("https://stats.ncaa.org", roster_link)
+    roster_url <- paste0("http://stats.ncaa.org", roster_link)
     #Read html for the roster page and format it so it can be usabl
 
     file_dir <- paste0(base_path, "team_roster/")
@@ -1441,7 +1449,7 @@ get_team_roster <-
 
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
       isUrlRead <- T
-      html <- readLines(roster_url)
+      html <- readLines(con = url(roster_url, headers = c("User-Agent" = "My Custom User Agent")))
       dir.create(file_dir, recursive = T, showWarnings = F)
       writeLines(html, file_path)
     } else if (file.exists(file_path)) {
@@ -1452,7 +1460,7 @@ get_team_roster <-
       html <- readLines(file_path)
     } else {
       isUrlRead <- T
-      html <- readLines(roster_url)
+      html <- readLines(con = url(roster_url, headers = c("User-Agent" = "My Custom User Agent")))
     }
 
     table <- XML::readHTMLTable(html)[[1]][, 1:5] %>%
@@ -2631,7 +2639,7 @@ scrape_box <-
 
     status <- "CLEAN"
 
-    url <- paste0("https://stats.ncaa.org/contests/", game_id,"/box_score")
+    url_text <- paste0("http://stats.ncaa.org/contests/", game_id,"/box_score")
     file_dir <- paste0(base_path, "box_score/")
     file_path <- paste0(file_dir, game_id, ".html")
     isUrlRead <- F
@@ -2639,7 +2647,7 @@ scrape_box <-
     # Give user option to save raw html file (to make future processing more efficient)
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
       isUrlRead <- T
-      html <- readLines(url)
+      html <- readLines(con = url(url_text, headers = c("User-Agent" = "My Custom User Agent")))
       dir.create(file_dir, recursive = T, showWarnings = F)
       writeLines(html, file_path)
     } else if (file.exists(file_path)) {
@@ -2650,7 +2658,7 @@ scrape_box <-
       table <- XML::readHTMLTable(file_path)
     } else {
       isUrlRead <- T
-      table <- XML::readHTMLTable(url)
+      table <- XML::readHTMLTable(url_text)
     }
 
     if (length(table) == 0) {
@@ -2699,6 +2707,7 @@ scrape_box <-
 #'
 #' This function returns a single data frame for a vector of box ids. A wrapping of scrape_box for multiple games
 #' @param  game_id vector of box ids for the game
+#' @param multi.games whether to aggregate over games
 #' @return data frame with each row representing a player in the game
 #' @export
 #' @examples
@@ -2734,7 +2743,7 @@ get_box_scores <- function(game_ids, multi.games = F, use_file = F, save_file = 
     multi_game <- game_data %>%
       dplyr::mutate(across(all_of(c("MP", "G", "FGM", "FGA", "TPM", "TPA", "FTM", "FTA", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "Fouls", "DQ", "Tech")), as.numeric)) %>%
       dplyr::mutate(across(where(is.numeric), function(x){x[is.na(x)] <- 0; return(x)})) %>%
-      dplyr::group_by(Player, Team, Pos) %>%
+      dplyr::group_by(Player, CleanName, Team, Pos) %>%
       dplyr::summarise_if(is.numeric, sum) %>%
       dplyr::mutate(
         FG. = FGM / FGA,

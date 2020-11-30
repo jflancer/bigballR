@@ -6,6 +6,7 @@
 \usage{
 get_box_scores(
   game_ids,
+  multi.games = F,
   use_file = F,
   save_file = F,
   base_path = NA,
@@ -13,6 +14,8 @@ get_box_scores(
 )
 }
 \arguments{
+\item{multi.games}{whether to aggregate over games}
+
 \item{game_id}{vector of box ids for the game}
 }
 \value{
