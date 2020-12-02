@@ -1214,7 +1214,7 @@ get_team_schedule <-
     if (use_file & !is.na(base_path) & file.exists(file_path)) {
       html <- readLines(file_path)
     } else {
-
+      html <- readLines(url_text)
     }
 
     # Give user option to save raw html file (to make future processing more efficient)
