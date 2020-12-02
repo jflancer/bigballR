@@ -65,16 +65,16 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     close(file_url)
     dir.create(file_dir, recursive = T, showWarnings = F)
     writeLines(html, file_path)
-  } else if (file.exists(file_path)) {
+  } else if (file.exists(file_path) & use_file) {
     html <- readLines(file_path)
-  }
-
-  if (use_file & !is.na(base_path)) {
-    table <- XML::readHTMLTable(file_path)
   } else {
     isUrlRead <- T
-    table <- XML::readHTMLTable(url_text)
+    file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+    html <- readLines(con = file_url)
+    close(file_url)
   }
+
+  table <- XML::readHTMLTable(html)
 
   if (length(table) == 0) {
     message("Game Not Found")
@@ -1211,16 +1211,20 @@ get_team_schedule <-
     file_dir <- paste0(base_path, "team_schedule/")
     file_path <- paste0(file_dir, team.id, ".html")
 
-    if (use_file & !is.na(base_path) & file.exists(file_path)) {
-      html <- readLines(file_path)
-    } else {
-      html <- readLines(url_text)
-    }
-
-    # Give user option to save raw html file (to make future processing more efficient)
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
+      isUrlRead <- T
+      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      html <- readLines(con = file_url)
+      close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
       writeLines(html, file_path)
+    } else if (file.exists(file_path) & use_file) {
+      html <- readLines(file_path)
+    } else {
+      isUrlRead <- T
+      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      html <- readLines(con = file_url)
+      close(file_url)
     }
 
     tables <- XML::readHTMLTable(html)
@@ -1439,11 +1443,7 @@ get_team_roster <-
       close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
       writeLines(html, file_path)
-    } else if (file.exists(file_path)) {
-      html <- readLines(file_path)
-    }
-
-    if (use_file & !is.na(base_path)) {
+    } else if (file.exists(file_path) & use_file) {
       html <- readLines(file_path)
     } else {
       isUrlRead <- T
@@ -1469,11 +1469,7 @@ get_team_roster <-
       close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
       writeLines(html, file_path)
-    } else if (file.exists(file_path)) {
-      html <- readLines(file_path)
-    }
-
-    if (use_file & !is.na(base_path)) {
+    } else if (file.exists(file_path) & use_file) {
       html <- readLines(file_path)
     } else {
       isUrlRead <- T
@@ -2671,16 +2667,16 @@ scrape_box <-
       close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
       writeLines(html, file_path)
-    } else if (file.exists(file_path)) {
+    } else if (file.exists(file_path) & use_file) {
       html <- readLines(file_path)
-    }
-
-    if (use_file & !is.na(base_path)) {
-      table <- XML::readHTMLTable(file_path)
     } else {
       isUrlRead <- T
-      table <- XML::readHTMLTable(url_text)
+      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      html <- readLines(con = file_url)
+      close(file_url)
     }
+
+    table <- XML::readHTMLTable(html)
 
     if (length(table) == 0) {
       message("Game Not Found")
@@ -2706,6 +2702,9 @@ scrape_box <-
     format <- toupper(gsub("\\s+",".", format))
     player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|JR|SR|\\.III|III|\\.II|II","", format)
     player_name <- trimws(player_name)
+
+    clean_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|JR|SR|\\.III|III|\\.II|II","", clean_name, ignore.case = T)
+    clean_name <- trimws(clean_name)
 
     box$CleanName <- clean_name
     box$Player <- player_name
@@ -2762,6 +2761,7 @@ get_box_scores <- function(game_ids, multi.games = F, use_file = F, save_file = 
 
   if (multi.games == T) {
     multi_game <- game_data %>%
+      dplyr::select(-Game_ID) %>%
       dplyr::mutate(across(all_of(c("MP", "G", "FGM", "FGA", "TPM", "TPA", "FTM", "FTA", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "Fouls", "DQ", "Tech")), as.numeric)) %>%
       dplyr::mutate(across(where(is.numeric), function(x){x[is.na(x)] <- 0; return(x)})) %>%
       dplyr::group_by(Player, CleanName, Team, Pos) %>%
