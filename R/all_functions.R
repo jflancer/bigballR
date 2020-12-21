@@ -5,10 +5,10 @@
 #' counts displays the number of events players committed when it is found they were not on the court at the time of the
 #' event. The substitution mistake warning indicates an unclean substitution was entered. (ex. 2 players enter and 1 leaves)
 #' @param  game_id string made up of digits given to each unique game. This can be found in the play-by-play url for each game.
-#' @param use_file Boolean. If true, read from html file rather than url. File path constructed from `base_path`
-#' @param save_file Boolean. If true, save html from url to file. File path constructed from `base_path`
-#' @param base_path String. Specify base location of html file save, ex. "/Users/jake/html_files/"
-#' @param overwrite Boolean. If true, save file will overwrite an existing file at same path. Otherwise will read from existing file
+#' @param use_file Boolean. If true, retrieve from local storage rather than url. File path constructed from `base_path` directory
+#' @param save_file Boolean. If true, save html for game to local file. File path constructed from `base_path`
+#' @param base_path String. Specify base directory of html file save, ex. "/Users/jake/html_files/"
+#' @param overwrite Boolean. If true, save file will overwrite an existing file at same path. Otherwise will read from existing file (if use_file=T)
 #' @import dplyr
 #' @importFrom XML readHTMLTable
 #' @export
@@ -211,7 +211,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     players <- gsub("[^[:alnum:] ]", "", players)
     player_name <- gsub("\\s+", ".", toupper(players))
     # Remove any notation of JR/SR/II/III from player name
-    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|JR|SR|\\.III|III|\\.II|II","", player_name)
+    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II","", player_name)
     player_name <- trimws(player_name)
 
     # Now getting events from left of comma
@@ -254,9 +254,9 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     last <- gsub("[^[:alnum:] ]", "", last)
 
     player_name <- paste0(first, ".", last)
-    player_name <-
-      ifelse(substr(player_name, 1, 1) == ".", "TEAM", player_name)
-    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|JR|SR|\\.III|III|\\.II|II","", player_name)
+    player_name <- ifelse(substr(player_name, 1, 1) == ".", "TEAM", player_name)
+    player_name <- gsub("\\s+", ".", player_name)
+    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II","", player_name)
   }
 
   # Now cleaning can ignore version
@@ -322,7 +322,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
   # Now Check to See if Players Were Recorded in the Game
   if (length(unique(dirty_game$Player_1)) == 1) {
 
-    # No Player Cleaning ####
+    # No Player Cleaning
     # Found no player names in data
     # Does final cleaning of data without finding on off
     # Gets the length of each event and assigns a shot value
@@ -1251,7 +1251,8 @@ get_team_schedule <-
       file_path <- paste0(file_dir, game_ids[i], ".html")
       isUrlRead <- F
 
-      if (use_file & !is.na(base_path) & file.exists(file_path)) {
+      # Assumes that if pbp is available from file it will always be used rather than re-scraping
+      if (!is.na(base_path) & file.exists(file_path)) {
         temp_html <- readLines(file_path)
       } else {
         isUrlRead <- T
@@ -1261,7 +1262,7 @@ get_team_schedule <-
       }
 
       # Give user option to save raw html file (to make future processing more efficient)
-      if (save_file & !is.na(base_path)) {
+      if (save_file & !is.na(base_path) & !file.exists(file_path)) {
         dir.create(file_dir, recursive = T, showWarnings = F)
         writeLines(temp_html, file_path)
       }
@@ -2294,6 +2295,7 @@ convert_events <- function(events) {
   )
   return(events2)
 }
+
 order_seconds <- function(by_second_pbp) {
   # Ordering the play by play to handle when enterer uses different ordering
   # to calculate assists, needs to format as shot attempt / assist / events / subs
@@ -2688,12 +2690,12 @@ scrape_box <-
     away <- table[[5]]
     colnames(away) <- away[1,]
     away <- away[2:(nrow(away)-1),]
-    away$Team <- background[1,1]
+    away$Team <- gsub(" \\((.*)\\)", "", background[1,1])
 
     home <- table[[6]]
     colnames(home) <- home[1,]
     home <- home[2:(nrow(home)-1),]
-    home$Team <- background[2,1]
+    home$Team <- gsub(" \\((.*)\\)", "", background[2,1])
 
     box <- bind_rows(home, away)
 
