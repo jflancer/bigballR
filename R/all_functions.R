@@ -48,6 +48,7 @@
 #' @examples
 #' scrape_game(4674164)
 scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwrite=F) {
+
   #track status of cleanliness of data for game
   status <- "CLEAN"
 
@@ -61,16 +62,16 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
   if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
     isUrlRead <- T
     file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
-    html <- readLines(con = file_url)
+    html <- readLines(con = file_url, warn=F)
     close(file_url)
     dir.create(file_dir, recursive = T, showWarnings = F)
     writeLines(html, file_path)
   } else if (file.exists(file_path) & use_file) {
-    html <- readLines(file_path)
+    html <- readLines(file_path, warn=F)
   } else {
     isUrlRead <- T
     file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
-    html <- readLines(con = file_url)
+    html <- readLines(con = file_url, warn=F)
     close(file_url)
   }
 
@@ -211,7 +212,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     players <- gsub("[^[:alnum:] ]", "", players)
     player_name <- gsub("\\s+", ".", toupper(players))
     # Remove any notation of JR/SR/II/III from player name
-    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II","", player_name)
+    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV","", player_name)
     player_name <- trimws(player_name)
 
     # Now getting events from left of comma
@@ -256,10 +257,10 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     player_name <- paste0(first, ".", last)
     player_name <- ifelse(substr(player_name, 1, 1) == ".", "TEAM", player_name)
     player_name <- gsub("\\s+", ".", player_name)
-    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II","", player_name)
+    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV","", player_name)
   }
 
-  # Now cleaning can ignore version
+  # Now format controls for version
 
   # Separate event into first word and rest of word
   first_word <-
@@ -301,11 +302,32 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     Event_Description = player1,
     stringsAsFactors = F
   )  %>%
+    dplyr::mutate(
+      Event_Priority = case_when(
+        Event_Type == "won Jumpball" ~ 1,
+        Event_Type == "lost Jumpball" ~ 2,
+        Event_Type == "Offensive Rebound" ~ 3,
+        Event_Type %in% c(
+          "Three Point Jumper",
+          "Two Point Jumper",
+          "Layup",
+          "Hook",
+          "Dunk",
+          "Tip In"
+        ) ~ 4,
+        Event_Type == "Assist" ~ 5, # Order assist directly after shot so rows can be merged
+        !Event_Type %in% c("Enters Game", "Leaves Game") ~ 6,
+        T ~ 7
+      ),
+      Home_Score = as.numeric(Home_Score),
+      Away_Score = as.numeric(Away_Score)
+    ) %>%
     # Function is in use as scorekeepers often don't follow same ordering
     # This formats as Row 1: Shot, Row 2: Assist, Next: Substitutions, Final: Everything Else
-    dplyr::group_by(Game_Seconds, Home_Score, Away_Score) %>%
-    dplyr::do(order_seconds(.)) %>%
-    dplyr::ungroup() %>%
+    # dplyr::group_by(Game_Seconds, Home_Score, Away_Score) %>%
+    dplyr::arrange(Half_Status, Game_Seconds, Home_Score, Away_Score, Event_Priority) %>%
+    # dplyr::do(order_seconds(.)) %>%
+    # dplyr::ungroup() %>%
     # Data formats assists independently of shots in following row
     # This makes it easier to use data but combining shot+assist into one row with a player_2 column for the assist player
     dplyr::mutate(
@@ -317,7 +339,92 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         Event_Description
       )
     ) %>%
-    dplyr::filter(Event_Type != "Assist")
+    dplyr::filter(Event_Type != "Assist") %>%
+    dplyr::select(-Event_Priority) %>%
+    dplyr::mutate(
+      Poss_Num = NA,
+      Poss_Team = NA,
+      Event_Length = Game_Seconds - dplyr::lag(Game_Seconds),
+      Event_Length = ifelse(is.na(Event_Length), Game_Seconds, Event_Length),
+      Shot_Value = dplyr::case_when(
+        Event_Type == "Two Point Jumper" ~ 2,
+        Event_Type == "Layup" ~ 2,
+        Event_Type == "Three Point Jumper" ~ 3,
+        Event_Type == "Dunk" ~ 2,
+        Event_Type == "Free Throw" ~ 1,
+        Event_Type == "Tip In" ~ 2,
+        Event_Type == "Hook" ~ 2
+      )
+    )
+
+  # Calculating Possessions ####
+  poss_num <- 0
+  nrows <- 0
+  for(i in 1:max(dirty_game$Half_Status)) {
+    half_data <- dplyr::filter(dirty_game, Half_Status == i)
+    poss_team <- dplyr::first(half_data$Event_Team[!half_data$Event_Type %in% c("Leaves Game", "Enters Game")])
+    other_team <- ifelse(poss_team == home_team, away_team, home_team)
+    poss_switch = F
+    poss_num <- poss_num + 1
+
+    for(j in 1:nrow(half_data)) {
+      # If row has event that ends possession, increment num and swap team
+      team <- half_data$Event_Team[j]
+      type <- half_data$Event_Type[j]
+      result <- half_data$Event_Result[j]
+      seconds <- half_data$Game_Seconds[j]
+
+      # Using max(j-1, 1) to handle first entry
+      swap <- poss_switch & seconds != half_data$Game_Seconds[max(j-1, 1)]
+      if(swap) {
+        poss_num <- poss_num + 1
+        tmp <- poss_team
+        poss_team <- other_team
+        other_team <- tmp
+        poss_switch <- F
+      }
+
+      # force switch possession if shot is attributed to wrong team... if parse is false this puts it back to correct
+      # revisit - might be a more efficient way
+      if (!is.na(result) & team != poss_team) {
+        poss_num <- poss_num + 1 - swap*1
+        tmp <- poss_team
+        poss_team <- other_team
+        other_team <- tmp
+        poss_switch <- F
+      }
+
+      and_one <- any(half_data$Event_Type[half_data$Game_Seconds == seconds] == "Free Throw") # Detect and-one to not switch possession on the made shot
+      next_reb <-half_data$Event_Type[j+1] %in% c("Defensive Rebound", "Free Throw") # Catch final free throw misses -- note free throw sequences are occassionally out of order in pbp
+
+      if(
+        type %in% c("Defensive Rebound", "Turnover") |
+        (type %in% c("Two Point Jumper", "Three Point Jumper", "Layup", "Dunk", "Tip In", "Hook") & result == "made" & !and_one) |
+        (type == "Free Throw" & result == "made" & !next_reb)
+      ) {
+
+        # Free throw made + current or next time does not include a defensive rebound
+        poss_switch = T
+      }
+
+      dirty_game$Poss_Num[j+nrows] <- poss_num
+      dirty_game$Poss_Team[j+nrows] <- poss_team
+    }
+    nrows <- nrows + nrow(half_data)
+  }
+
+  dirty_game <- dirty_game %>%
+    dplyr::group_by(Poss_Num) %>%
+    dplyr::mutate(
+      Poss_Length = cumsum(Event_Length)
+    ) %>%
+    dplyr::ungroup()
+
+  # Test case for if shots are attributed correctly
+  test_poss <- dirty_game %>% group_by(Event_Team, Poss_Team, Half_Status) %>% summarise(Pts = sum(!is.na(Event_Result), na.rm=T), .groups = "keep") %>% arrange(Half_Status)
+  if(sum(test_poss$Pts>0) != (2+numbOTs)*2) {
+    message("Warning: Possession Parsing Has Errors")
+  }
 
   # Now Check to See if Players Were Recorded in the Game
   if (length(unique(dirty_game$Player_1)) == 1) {
@@ -326,28 +433,13 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     # Found no player names in data
     # Does final cleaning of data without finding on off
     # Gets the length of each event and assigns a shot value
-    mild_game <- dirty_game %>%
-      dplyr::mutate(Event_Length = Game_Seconds - dplyr::lag(Game_Seconds))
-    mild_game$Event_Length[1] <- mild_game$Game_Seconds[1]
-
     # Creates the final dataframe to be used without players
-    clean_game <- mild_game %>%
+    clean_game <- dirty_game %>%
       dplyr::mutate(
-        Home_Score = as.numeric(Home_Score),
-        Away_Score = as.numeric(Away_Score),
-        Shot_Value = dplyr::case_when(
-          Event_Type == "Two Point Jumper" ~ 2,
-          Event_Type == "Layup" ~ 2,
-          Event_Type == "Three Point Jumper" ~ 3,
-          Event_Type == "Dunk" ~ 2,
-          Event_Type == "Hook" ~ 2,
-          Event_Type == "Free Throw" ~ 1,
-          Event_Type == "Tip In" ~ 2
-        ),
         Status = "NO_PLAYER", #set status variable mentioned earlier
         Sub_Deviate = nrow(.)
       ) %>%
-      bind_cols(as.data.frame(matrix(rep("NO_PLAYER", nrow(mild_game)*10),
+      bind_cols(as.data.frame(matrix(rep(NA, nrow(mild_game)*10),
                        ncol = 10,
                        nrow = nrow(mild_game))) %>%
                   rename(Home.1 = V1, Home.2 = V2, Home.3 = V3, Home.4 = V4, Home.5 = V5,
@@ -364,6 +456,9 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         Event_Result,
         Shot_Value,
         Event_Length,
+        Poss_Num,
+        Poss_Team,
+        Poss_Length,
         Home.1:Away.5,
         Status,
         Sub_Deviate
@@ -376,7 +471,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
       home_team,
       "v",
       away_team,
-      "| Status: No Players",
+      "| Status: No Substitution Data",
       format,
       "|",
       game_id
@@ -391,7 +486,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
       dplyr::filter(Event_Type %in% c("Leaves Game", "Enters Game"),
              Game_Seconds != 1200) %>%
       dplyr::group_by(Game_Seconds) %>%
-      dplyr::summarise(count = dplyr::n()) %>%
+      dplyr::summarise(count = dplyr::n(), .groups = "keep") %>%
       dplyr::ungroup() %>%
       dplyr::filter(count %% 2 != 0)
     # Report substitition mistake messages to users
@@ -553,7 +648,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
           all_starters[1:5]
         # Handle case when less than 5 starters are found even after error checks
         } else {
-          # Just takes first n players that have recorded an event in the hal
+          # Just takes first n players that have recorded an event in the half
           # all_found <- unique(c(home_starters, play_before_sub, non_subs, error_catch))
 
           all_half_players <- half_data %>%
@@ -818,6 +913,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
       ###END OF LOOP
     }
 
+
     # Player Cleaning ####
 
     #Remove the first row as it is made up of NAs from nature of how it's structured
@@ -832,35 +928,18 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
 
     #Adds these columns to a new play by play data frame
     mild_game <-
-      cbind(dirty_game,
-            as.data.frame(home_player_matrix, row.names = F))
-    mild_game <-
-      cbind(mild_game,
-            as.data.frame(away_player_matrix, row.names = F))
+      dplyr::bind_cols(list(dirty_game, as.data.frame(home_player_matrix, row.names = F), as.data.frame(away_player_matrix, row.names = F))
+            )
 
     #Add the event length variable which can often be helpful
-    mild_game <- mild_game %>%
-      dplyr::mutate(Event_Length = Game_Seconds - dplyr::lag(Game_Seconds))
-    mild_game$Event_Length[1] <- mild_game$Game_Seconds[1]
 
     #Can now put together final data frame
     clean_game <- mild_game %>%
-      dplyr::mutate(
-        Home_Score = as.numeric(Home_Score),
-        Away_Score = as.numeric(Away_Score),
-        Shot_Value = dplyr::case_when(
-          Event_Type == "Two Point Jumper" ~ 2,
-          Event_Type == "Layup" ~ 2,
-          Event_Type == "Three Point Jumper" ~ 3,
-          Event_Type == "Dunk" ~ 2,
-          Event_Type == "Free Throw" ~ 1,
-          Event_Type == "Tip In" ~ 2,
-          Event_Type == "Hook" ~ 2
-        )
-      ) %>%
       dplyr::mutate_if(is.factor, as.character) %>%
       dplyr::select(
-        ID:Event_Team,
+        ID:Away,
+        Half_Status,
+        Time:Event_Team,
         Event_Description,
         Player_1,
         Player_2,
@@ -868,14 +947,28 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         Event_Result,
         Shot_Value,
         Event_Length,
+        Poss_Num,
+        Poss_Team,
+        Poss_Length,
         Home.1:Away.5
       ) %>%
-      dplyr::mutate(Status = status)
+      dplyr::mutate(
+        Status = status,
+        Garbage_Thresh = dplyr::case_when(
+          abs(Home_Score - Away_Score) >= 25 & Game_Seconds >= 1500 ~ T,
+          abs(Home_Score - Away_Score) >= 20 & Game_Seconds >= 1800  ~ T,
+          abs(Home_Score - Away_Score) >= 15 & Game_Seconds >= 2160  ~ T,
+          TRUE ~ F
+        ),
+        Garbage_Time = cumsum(Garbage_Thresh) >= 1
+        ) %>%
+      select(-Garbage_Thresh)
+
 
     # Final round of checking for data entry mistakes by scorekeeper
     # Look for if a player is said to do an event and they aren't on the court as determined above
     player_errors <- apply(clean_game, 1, function(x) {
-      if (sum(x[13:14] %in% c(x[19:28]), na.rm = T) == 0) {
+      if (sum(x[13:14] %in% c(x[22:31]), na.rm = T) == 0) {
         return(T)
       } else{
         return(F)
@@ -896,8 +989,8 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
       ),]
     # Provide a column for deviations, allowing user to filter pbp with too many errors
     clean_game$Sub_Deviate <- nrow(entry_mistakes)
-    # Warns user of number of entry mistakes found - only report iif significant
-    if (nrow(entry_mistakes) > 5) {
+    # Warns user of number of entry mistakes found - only report if significant
+    if (nrow(entry_mistakes) > 10) {
       message(paste(nrow(entry_mistakes), "on court player discrepancies"))
     }
     # Give user final message about the status of the game they've scraped
@@ -1060,7 +1153,7 @@ get_date_games <-
     # Give user option to save raw html file (to make future processing more efficient)
     if (save_file & !is.na(base_path)) {
       file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
-      html <- readLines(con = file_url)
+      html <- readLines(con = file_url, warn=F)
       close(file_url)
 
       dir.create(file_dir, recursive = T, showWarnings = F)
@@ -1069,18 +1162,19 @@ get_date_games <-
 
     # Reads the html and pulls the table holding the scores
     if (use_file & !is.na(base_path)) {
-      html <- readLines(file_path)
+      html <- readLines(file_path, warn=F)
     } else {
       file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
-      html <- readLines(con = file_url)
+      html <- readLines(con = file_url, warn=F)
       close(file_url)
     }
 
-    table <- tryCatch(XML::readHTMLTable(html)[[1]],
-             error = function(e) {
-               stop("No Games Table Found")
-             })
-
+    table <- XML::readHTMLTable(html)
+    if(length(table) == 0) {
+      stop("No Games Table Found")
+    } else {
+      table <- table[[1]]
+    }
 
     #The table is always read in the same messy way
     #Each game in the schedule starts on a row following pattern 1,6,11,etc. this gets all of those indices
@@ -1147,7 +1241,7 @@ get_date_games <-
     if(length(game_ids)>0){
       for (i in 1:length(url2)) {
         file_url <- url(url2[i], headers = c("User-Agent" = "My Custom User Agent"))
-        temp_html <- readLines(con = file_url)
+        temp_html <- readLines(con = file_url, warn=F)
         close(file_url)
         new_id <- unlist(stringr::str_extract(temp_html, "(?<=play_by_play/)\\d+"))
         new_id <- unique(new_id[!is.na(new_id)])
@@ -1191,8 +1285,8 @@ get_team_schedule <-
   function(team.id = NA,
            season = NA,
            team.name = NA,
-           use_file = T,
-           save_file = T,
+           use_file = F,
+           save_file = F,
            base_path = NA,
            overwrite = F) {
 
@@ -1214,16 +1308,16 @@ get_team_schedule <-
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
       isUrlRead <- T
       file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
-      html <- readLines(con = file_url)
+      html <- readLines(con = file_url, warn=F)
       close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
       writeLines(html, file_path)
     } else if (file.exists(file_path) & use_file) {
-      html <- readLines(file_path)
+      html <- readLines(file_path, warn=F)
     } else {
       isUrlRead <- T
       file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
-      html <- readLines(con = file_url)
+      html <- readLines(con = file_url, warn=F)
       close(file_url)
     }
 
@@ -1253,11 +1347,11 @@ get_team_schedule <-
 
       # Assumes that if pbp is available from file it will always be used rather than re-scraping
       if (!is.na(base_path) & file.exists(file_path)) {
-        temp_html <- readLines(file_path)
+        temp_html <- readLines(file_path, warn=F)
       } else {
         isUrlRead <- T
         file_url <- url(url2[i], headers = c("User-Agent" = "My Custom User Agent"))
-        temp_html <- readLines(con = file_url)
+        temp_html <- readLines(con = file_url, warn=F)
         close(file_url)
       }
 
@@ -1440,16 +1534,16 @@ get_team_roster <-
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
       isUrlRead <- T
       file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
-      html <- readLines(con = file_url)
+      html <- readLines(con = file_url, warn=F)
       close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
       writeLines(html, file_path)
     } else if (file.exists(file_path) & use_file) {
-      html <- readLines(file_path)
+      html <- readLines(file_path, warn=F)
     } else {
       isUrlRead <- T
       file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
-      html <- readLines(con = file_url)
+      html <- readLines(con = file_url, warn=F)
       close(file_url)
     }
 
@@ -1466,16 +1560,16 @@ get_team_roster <-
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
       isUrlRead <- T
       file_url <- url(roster_url, headers = c("User-Agent" = "My Custom User Agent"))
-      html <- readLines(con = file_url)
+      html <- readLines(con = file_url, warn=F)
       close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
       writeLines(html, file_path)
     } else if (file.exists(file_path) & use_file) {
-      html <- readLines(file_path)
+      html <- readLines(file_path, warn=F)
     } else {
       isUrlRead <- T
       file_url <- url(roster_url, headers = c("User-Agent" = "My Custom User Agent"))
-      html <- readLines(con = file_url)
+      html <- readLines(con = file_url, warn=F)
       close(file_url)
     }
 
@@ -1486,7 +1580,7 @@ get_team_roster <-
     clean_name <- sapply(strsplit(table$Player, ","), function(x){trimws(paste(x[length(x)],x[1]))})
     format <- gsub("[^[:alnum:] ]", "", clean_name)
     format <- toupper(gsub("\\s+",".", format))
-    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|JR|SR|\\.III|III|\\.II|II","", format)
+    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV","", format)
     player_name <- trimws(player_name)
 
     table$Player <- player_name
@@ -1598,7 +1692,7 @@ get_lineups <-
   function(play_by_play_data = NA,
            keep.dirty = F,
            garbage.filter = F,
-           error.thresh = 5) {
+           error.thresh = 10) {
 
     #First user can decide if they want to keep or remove data from potentially corrupted games
     if (keep.dirty == F) {
@@ -1622,51 +1716,28 @@ get_lineups <-
       # A team is: Up by 25+ with 5 mins gone in 2nd half, up 20 with 10 mins gone in 2nd half,
       # up 15 with 16 mins gone in 2nd half
       lineup_stuff <- lineup_stuff %>%
-        dplyr::group_by(ID) %>%
-        dplyr::mutate(
-          Garbage_Thresh = dplyr::case_when(
-            abs(Home_Score - Away_Score) >= 25 & Game_Seconds >= 1500 ~ T,
-            abs(Home_Score - Away_Score) >= 20 & Game_Seconds >= 1800  ~ T,
-            abs(Home_Score - Away_Score) >= 15 & Game_Seconds >= 2160  ~ T,
-            TRUE ~ F
-          ),
-          Garbage_Time = cumsum(Garbage_Thresh) >= 1
-        ) %>%
-        dplyr::filter(Garbage_Time == F) %>%
-        dplyr::select(-Garbage_Thresh, -Garbage_Time) %>%
-        dplyr::ungroup()
+        dplyr::filter(Garbage_Time == F)
     }
 
-    # if(ncol(lineup_stuff) == 18) {
-    #   lineup_stuff <- cbind(lineup_stuff, matrix(rep("Team", nrow(lineup_stuff)*10),
-    #                                              ncol = 10,
-    #                                              nrow = nrow(lineup_stuff))
-    # }
-
-    # missing_players <- apply(lineup_stuff[,19:28], 2, function(x){sum(is.na(x))})
-    missing_rows <- apply(lineup_stuff[,19:28], 1, function(x){sum(is.na(x))})
+    missing_rows <- apply(lineup_stuff[,22:31], 1, function(x){sum(is.na(x))})
     message(paste("Forced to remove", length(which(missing_rows!=0)), "rows due to missing players in on/off"))
 
     lineup_stuff <- lineup_stuff %>%
       filter(missing_rows==0)
 
     # Now sorts the home and away player alphabetically so players are always in the same column for a given lineup
-    lineup_stuff <- apply(lineup_stuff, 1, function(x)
+    lineup_stuff2 <- apply(lineup_stuff, 1, function(x)
     {
-      home_players <- sort(x[19:23])
-      away_players <- sort(x[24:28])
-      return(c(x[1:18], home_players, away_players, x[29:30]))
+      home_players <- sort(x[22:26])
+      away_players <- sort(x[27:31])
+      return(c(x[1:21], home_players, away_players, x[32:34]))
     })
 
     #Converts the sorted back into a data frame
     lineup_stuff2 <-
-      data.frame(matrix(unlist(lineup_stuff), ncol = 30, byrow = T), stringsAsFactors = F)
+      data.frame(matrix(unlist(lineup_stuff2), ncol = 34, byrow = T), stringsAsFactors = F)
 
-    # if(ncol(play_by_play_data) == 31){
-      # colnames(lineup_stuff2) <- colnames(play_by_play_data)[-30]
-    # } else {
-      colnames(lineup_stuff2) <- colnames(play_by_play_data)
-    # }
+    colnames(lineup_stuff2) <- colnames(play_by_play_data)
 
     #Get all home lineups and calculate a variety of stats for each lineup
     #o is used to denote opponents
@@ -2012,31 +2083,6 @@ get_player_lineups <-
     if(any(is.na(Included)) & any(is.na(Excluded))) {
       return(Lineup_Data)
     }
-
-    #Figures out team that is being looked for from the vectors of players
-    # find_team <- unique(
-    #   dplyr::filter(
-    #     Lineup_Data,
-    #     P1 %in% Included |
-    #       P2 %in% Included |
-    #       P3 %in% Included |
-    #       P4 %in% Included |
-    #       P5 %in% Included |
-    #       P1 %in% Excluded |
-    #       P2 %in% Excluded |
-    #       P3 %in% Excluded |
-    #       P4 %in% Excluded |
-    #       P5 %in% Excluded
-    #   )$Team
-    # )
-    #
-    # if (length(find_team) > 1) {
-    #   stop("ERROR- MULTIPLE TEAMS SELECTED")
-    # }
-
-    # #get all lineups at first
-    # data <- Lineup_Data %>%
-    #   dplyr::filter(Team == find_team)
 
     #create variable storing whether the lineup includes/excludes correct players
     relRow <- rep(T , nrow(Lineup_Data))
@@ -2665,16 +2711,16 @@ scrape_box <-
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
       isUrlRead <- T
       file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
-      html <- readLines(con = file_url)
+      html <- readLines(con = file_url, warn=F)
       close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
       writeLines(html, file_path)
     } else if (file.exists(file_path) & use_file) {
-      html <- readLines(file_path)
+      html <- readLines(file_path, warn=F)
     } else {
       isUrlRead <- T
       file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
-      html <- readLines(con = file_url)
+      html <- readLines(con = file_url, warn=F)
       close(file_url)
     }
 
@@ -2702,10 +2748,10 @@ scrape_box <-
     clean_name <- sapply(strsplit(box$Player, ","), function(x){trimws(paste(x[length(x)],x[1]))})
     format <- gsub("[^[:alnum:] ]", "", clean_name)
     format <- toupper(gsub("\\s+",".", format))
-    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|JR|SR|\\.III|III|\\.II|II","", format)
+    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV","", format)
     player_name <- trimws(player_name)
 
-    clean_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|JR|SR|\\.III|III|\\.II|II","", clean_name, ignore.case = T)
+    clean_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV","", clean_name, ignore.case = T)
     clean_name <- trimws(clean_name)
 
     box$CleanName <- clean_name
