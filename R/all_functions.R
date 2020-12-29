@@ -988,11 +988,11 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
           abs(Home_Score - Away_Score) >= 15 & Game_Seconds >= 2280  ~ T,
           TRUE ~ F
         ),
-        # Check how many starters are in the game
+        # Only call garbage time if <= 3 starters are in... note: Ben Falk / CTG uses 2
         Starter_Thresh = ((Home.1 %in% home_starters) + (Home.2 %in% home_starters) +
           (Home.3 %in% home_starters) + (Home.4 %in% home_starters) + (Home.5 %in% home_starters) +
           (Away.1 %in% away_starters) + (Away.2 %in% away_starters) + (Away.3 %in% away_starters) +
-          (Away.4 %in% away_starters) + (Away.5 %in% away_starters)) <= 2,
+          (Away.4 %in% away_starters) + (Away.5 %in% away_starters)) <= 3,
         # If both thresholds are met we hit garbage time and stay in it
         isGarbageTime = cumsum(Garbage_Thresh*Starter_Thresh) >= 1
         ) %>%
@@ -1727,7 +1727,6 @@ get_play_by_play <- function(game_ids, use_file = F, save_file = F, base_path = 
 #' }
 get_lineups <-
   function(play_by_play_data = NA, include_transition = F) {
-
     missing_rows <- apply(play_by_play_data[,which(colnames(play_by_play_data)=="Home.1"):which(colnames(play_by_play_data)=="Away.5")], 1, function(x){sum(is.na(x))})
     message(paste("Forced to remove", length(which(missing_rows!=0)), "rows due to missing players in on/off"))
 
@@ -2308,7 +2307,9 @@ get_team_stats <-
   function(play_by_play_data = NA, include_transition = F) {
     team_data <- play_by_play_data %>%
       dplyr::mutate(across(Home.1:Away.5, ~""))
-    team_stats <- get_lineups(team_data, include_transition) %>%
+    team_stats <- team_data %>%
+      dplyr::group_by(ID, Home, Away) %>%
+      do(get_lineups(., include_transition)) %>%
       dplyr::select(-P1:-P5)
   }
 
@@ -2577,10 +2578,7 @@ get_player_lineups <-
 #' \item{PBACK} - Successful putback: A rim attempt made preceded by an offensive rebound from the same player
 #' @export
 #' @import dplyr
-get_player_stats <-
-  function(play_by_play_data = NA,
-           multi.games = F) {
-
+get_player_stats <- function(play_by_play_data = NA, multi.games = F) {
     # Uses same filtering of lineups found in documentation for get lineups
     if (length(play_by_play_data) == 0) {
       message("INPUT NOT FOUND")
@@ -2764,7 +2762,7 @@ get_player_stats <-
       ) %>%
       dplyr::mutate_if(is.numeric, round, 3) %>%
       dplyr::select(
-        ID:Player, MINS, POSS, PTS, ORB, DRB, AST, STL, BLK, TOV, PF, TS., eFG., FGM, FGA, FG.,
+        ID:Player, MINS, oPOSS, PTS, ORB, DRB, AST, STL, BLK, TOV, PF, TS., eFG., FGM, FGA, FG.,
         TPM, TPA, TP., FTM, FTA, FT., RIMM, RIMA, RIM., MIDM, MIDA, MID., PBACKM, PBACKA, PBACK.,
         BLK_rim, BLK_mid, BLK_three,
         # Transition
@@ -2848,7 +2846,7 @@ get_player_stats <-
         dplyr::mutate_if(is.numeric, round, 3) %>%
         dplyr::left_join(starters, by = "Player") %>%
         dplyr::select(
-          Player, Team, GP, GS, MINS, POSS, PTS, ORB, DRB, AST, STL, BLK, TOV, PF, TS., eFG., FGM, FGA, FG.,
+          Player, Team, GP, GS, MINS, oPOSS, PTS, ORB, DRB, AST, STL, BLK, TOV, PF, TS., eFG., FGM, FGA, FG.,
           TPM, TPA, TP., FTM, FTA, FT., RIMM, RIMA, RIM., MIDM, MIDA, MID., PBACKM, PBACKA, PBACK., BLK_rim, BLK_mid, BLK_three,
           # Transition
           PTS_trans, ORB_trans, DRB_trans, AST_trans, STL_trans, BLK_trans, TOV_trans, TS._trans, eFG._trans, FGM_trans, FGA_trans, FG._trans, TPM_trans, TPA_trans, TP._trans, FTM_trans, FTA_trans, FT._trans, RIMM_trans, RIMA_trans, RIM._trans, MIDM_trans, MIDA_trans, MID._trans,
@@ -2940,7 +2938,7 @@ get_mins <- function(play_by_play_data) {
       dplyr::summarise(
         Mins = sum(Event_Length, na.rm = T) / 60,
         # Get total possessions by the count of distinct possession numbers
-        POSS = dplyr::n_distinct(POSS_num, na.rm = T),
+        oPOSS = dplyr::n_distinct(POSS_num, na.rm = T),
         .groups = "drop"
       ) %>%
       dplyr::ungroup() %>%
@@ -2955,7 +2953,7 @@ get_mins <- function(play_by_play_data) {
   final_df <- player_data %>%
     dplyr::group_by(Player, ID) %>%
     dplyr::summarise(MINS = sum(Mins),
-                     POSS = sum(POSS),
+                     oPOSS = sum(oPOSS),
                      .groups = "drop") %>%
     dplyr::ungroup()
 }
@@ -3297,15 +3295,25 @@ get_box_scores <- function(game_ids, multi.games = F, use_file = F, save_file = 
   }
 
   game_data <- game_data %>%
-    mutate(
+    dplyr::mutate(
+      dplyr::across(all_of(c("G", "FGM", "FGA", "TPM", "TPA", "FTM", "FTA", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "Fouls", "DQ", "Tech")), function(x){x[x==''] <- 0; return(x)}),
+      dplyr::across(all_of(c("G", "FGM", "FGA", "TPM", "TPA", "FTM", "FTA", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "Fouls", "DQ", "Tech")), as.numeric),
       MP = round(as.numeric(gsub(":(.*)", "", MP)) + as.numeric(gsub("(.*):", "", MP))/60, 1),
+      FG. = FGM / FGA,
+      TP. = TPM / TPA,
+      FT. = FTM / FTA,
+      TS. = (PTS / 2) / (FGA + .475 * FTA),
+      eFG. = (FGM + 0.5 * TPM) / FGA,
+      dplyr::across(where(is.numeric), function(x){x[is.nan(x)] <- 0; return(x)})
+    ) %>%
+    dplyr::select(
+      Game_ID:MP, PTS, ORB, DRB, TRB, AST, TO, STL, BLK, FGA, FGM, FG., TPA, TPM, TP., FTA, FTM, FT., TS., eFG., Fouls, DQ, Tech, CleanName
     )
+
 
   if (multi.games == T) {
     multi_game <- game_data %>%
       dplyr::select(-Game_ID) %>%
-      dplyr::mutate(across(all_of(c("MP", "G", "FGM", "FGA", "TPM", "TPA", "FTM", "FTA", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "Fouls", "DQ", "Tech")), as.numeric)) %>%
-      dplyr::mutate(across(where(is.numeric), function(x){x[is.na(x)] <- 0; return(x)})) %>%
       dplyr::group_by(Player, CleanName, Team, Pos) %>%
       dplyr::summarise_if(is.numeric, sum) %>%
       dplyr::mutate(
@@ -3314,7 +3322,10 @@ get_box_scores <- function(game_ids, multi.games = F, use_file = F, save_file = 
         FT. = FTM / FTA,
         TS. = (PTS / 2) / (FGA + .475 * FTA),
         eFG. = (FGM + 0.5 * TPM) / FGA) %>%
-      dplyr::mutate(across(where(is.numeric), function(x){x[is.nan(x)] <- 0; return(x)}))
+      dplyr::mutate(dplyr::across(where(is.numeric), function(x){x[is.nan(x)] <- 0; return(x)})) %>%
+      dplyr::select(
+        Player, CleanName, Team, Pos, MP, PTS, ORB, DRB, TRB, AST, TO, STL, BLK, FGA, FGM, FG., TPA, TPM, TP., FTA, FTM, FT., TS., eFG., Fouls, DQ, Tech, CleanName
+      )
 
       return(multi_game)
   }
