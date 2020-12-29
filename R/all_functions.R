@@ -3373,9 +3373,7 @@ get_possessions <- function(play_by_play_data = NA) {
   sorted_df <- sorted_df %>%
     mutate(across(c("ID", "Poss_Num", "Home_Score", "Away_Score", "PTS",
                     "isAssisted", "isTransition", "isGarbageTime", "firstShotTime", "lastEventTime"), as.numeric))
-
-
-
+  return(sorted_df)
 }
 
 
