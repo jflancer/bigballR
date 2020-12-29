@@ -316,6 +316,8 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
           "Tip In"
         ) ~ 4,
         Event_Type == "Assist" ~ 5, # Order assist directly after shot so rows can be merged
+        Event_Type == "Turnover" ~ 6,
+        Event_Type == "Steal" ~ 7,
         !Event_Type %in% c("Enters Game", "Leaves Game") ~ 6,
         T ~ 7
       ),
@@ -384,9 +386,9 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         poss_switch <- F
       }
 
-      # force switch possession if shot is attributed to wrong team... if parse is false this puts it back to correct
+      # force switch possession if event is attributed to wrong possession team, if parse is false this puts it back to correct
       # revisit - might be a more efficient way
-      if (!is.na(result) & team != poss_team) {
+      if (!is.na(result) & team != poss_team | type == "Turnover" & poss_team != team) {
         poss_num <- poss_num + 1 - swap*1
         tmp <- poss_team
         poss_team <- other_team
@@ -413,11 +415,30 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     nrows <- nrows + nrow(half_data)
   }
 
-  dirty_game <- dirty_game %>%
+  pos_start <- dirty_game %>%
     dplyr::group_by(Poss_Num) %>%
     dplyr::mutate(
-      Poss_Length = cumsum(Event_Length)
+      Terminal = last(Event_Type)
     ) %>%
+    dplyr::summarise(End = any(Terminal %in% c("Two Point Jumper", "Three Point Jumper", "Free Throw",
+                                               "Dunk", "Layup", "Hook", "Tip In", "Steal", "Defensive Rebound"
+                                               ))*1, .groups = "keep") %>%
+    dplyr::ungroup() %>%
+    dplyr::mutate(Valid = dplyr::lag(End, default =0)) %>%
+    dplyr::select(Poss_Num, Valid)
+
+  dirty_game <- dirty_game %>%
+    dplyr::left_join(pos_start, by = "Poss_Num") %>%
+    dplyr::group_by(Poss_Num) %>%
+    dplyr::mutate(
+      Poss_Length = cumsum(Event_Length),
+      isTransition = (first(Poss_Length) <= 10 & (first(Event_Type) %in% c(
+        "Steal", "Dunk", "Layup", "Hook", "Tip In",
+        "Two Point Jumper", "Three Point Jumper") |
+          first(Event_Type) == "Draws Foul" & Event_Team == Poss_Team |
+          first(Event_Type) == "Commits Foul" & Event_Team != Poss_Team) & Valid)
+    ) %>%
+    dplyr::select(-Valid) %>%
     dplyr::ungroup()
 
   # Test case for if shots are attributed correctly
@@ -932,6 +953,9 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
             )
 
     #Add the event length variable which can often be helpful
+    home_starters <- unlist(mild_game[1,23:27])
+    away_starters <- unlist(mild_game[1,28:32])
+
 
     #Can now put together final data frame
     clean_game <- mild_game %>%
@@ -950,25 +974,49 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         Poss_Num,
         Poss_Team,
         Poss_Length,
+        isTransition,
         Home.1:Away.5
       ) %>%
       dplyr::mutate(
         Status = status,
+        # Greater than 25 and 10-5 minutes left
+        # Greater than 20 and 5-2 minutes left
+        # Greater than 15 and <2 minutes left
         Garbage_Thresh = dplyr::case_when(
-          abs(Home_Score - Away_Score) >= 25 & Game_Seconds >= 1500 ~ T,
-          abs(Home_Score - Away_Score) >= 20 & Game_Seconds >= 1800  ~ T,
-          abs(Home_Score - Away_Score) >= 15 & Game_Seconds >= 2160  ~ T,
+          abs(Home_Score - Away_Score) >= 25 & Game_Seconds >= 1800 ~ T,
+          abs(Home_Score - Away_Score) >= 20 & Game_Seconds >= 2100  ~ T,
+          abs(Home_Score - Away_Score) >= 15 & Game_Seconds >= 2280  ~ T,
           TRUE ~ F
         ),
-        Garbage_Time = cumsum(Garbage_Thresh) >= 1
+        # Check how many starters are in the game
+        Starter_Thresh = ((Home.1 %in% home_starters) + (Home.2 %in% home_starters) +
+          (Home.3 %in% home_starters) + (Home.4 %in% home_starters) + (Home.5 %in% home_starters) +
+          (Away.1 %in% away_starters) + (Away.2 %in% away_starters) + (Away.3 %in% away_starters) +
+          (Away.4 %in% away_starters) + (Away.5 %in% away_starters)) <= 2,
+        # If both thresholds are met we hit garbage time and stay in it
+        isGarbageTime = cumsum(Garbage_Thresh*Starter_Thresh) >= 1
         ) %>%
-      select(-Garbage_Thresh)
-
+      dplyr::select(-Garbage_Thresh, -Starter_Thresh) %>%
+      # Making fix so that the players on the court to start a possession are credited for the entire possession
+      dplyr::group_by(Poss_Num) %>%
+      dplyr::mutate(
+        Home.1 = first(Home.1),
+        Home.2 = first(Home.2),
+        Home.3 = first(Home.3),
+        Home.4 = first(Home.4),
+        Home.5 = first(Home.5),
+        Away.1 = first(Away.1),
+        Away.2 = first(Away.2),
+        Away.3 = first(Away.3),
+        Away.4 = first(Away.4),
+        Away.5 = first(Away.5)
+      ) %>%
+      dplyr::ungroup()
 
     # Final round of checking for data entry mistakes by scorekeeper
     # Look for if a player is said to do an event and they aren't on the court as determined above
     player_errors <- apply(clean_game, 1, function(x) {
-      if (sum(x[13:14] %in% c(x[22:31]), na.rm = T) == 0) {
+      if (sum(x[which(colnames(clean_game) == "Player_1"):which(colnames(clean_game) == "Player_2")] %in% c(x[which(colnames(clean_game) == "Home.1"):which(colnames(clean_game) == "Away.5")]), na.rm = T) == 0) {
         return(T)
       } else{
         return(F)
@@ -1636,16 +1684,6 @@ get_play_by_play <- function(game_ids, use_file = F, save_file = F, base_path = 
 #' This function takes in a play-by-play dataframe, and generates all possible lineups for both teams.
 #' It then calculates a variety of statistics/metrics at a lineup level.
 #' @param play_by_play_data data frame consisting of play-by-play data from the functions scrape_game() or get_play_by_play()
-#' @param keep.dirty logical variable to specify whether or not to filter out potentially inaccurrate data. When FALSE,
-#' will remove all rows from games where the number of discrepencies is above the desired count. Defaults to FALSE.
-#' @param garbage.filter logical variable to specify whether or not to filter out garbage time entries. Uses format similar
-#' to cleaningtheglass.com definitions, but adjusted because of different time/scoring format. This is very subjective with no
-#' true criteria or reasoning. Follows rule: a game that enters garbage time cannot exit even if a team comes back.
-#' The remainder of a game is garbage time once a team is: Up by 25+ with 5 mins gone in 2nd half, up 20 with 10 mins gone in 2nd half,
-#' up 15 with 16 mins gone in 2nd half. Defaults to FALSE, which means garbage time will not be removed
-#' @param error.thresh numeric variable that lets user set their preferred discrepancy threshold with the keep.dirty variable. This means
-#' when less than the threshold occurs in a game, it will be considered clean. As defined in scrape_game(), a discrepancy occurs when a
-#' player registers an event when they are not found to be on the court. Defaults to 5 discrepancies.
 #' @import dplyr
 #' @export
 #' @return data frame with each row representing a unique lineup. All stats for entire lineup or opponent (o- prefix)
@@ -1682,60 +1720,32 @@ get_play_by_play <- function(game_ids, use_file = F, save_file = F, base_path = 
 #' \item{BLKrate} - Block rate: BLK/FGA
 #' \item{ORB.} - Offensive rebound percentage: ORB / (ORB + oDRB)
 #' \item{DRB.} - Defensive rebound percentage: DRB / (DRB + oORB)
-#' \item{OEFF} - Offensive efficiency: 100 * (PTS/POSS)
-#' \item{DEFF} - Defensive efficiency: 100 * (oPTS/POSS)
-#' \item{NETEFF} - Net efficiency: OEFF - DEFF
-#' \item{PACE} - Average time per possession (Seconds): (Possessions / Mins) * 60
-#' \item{ShotsPerPoss} - Estimate of shot attempts per possession: 1 + (ORB - TO) / POSS,
+#' \item{ORTG} - Offensive efficiency: 100 * (PTS/POSS)
+#' \item{DRTG} - Defensive efficiency: 100 * (oPTS/POSS)
+#' \item{NETRTG} - Net efficiency: OEFF - DEFF
+#' \item{TimePerPoss} - Average time per possession (Seconds): (Possessions / Mins) * 60
 #' }
 get_lineups <-
-  function(play_by_play_data = NA,
-           keep.dirty = F,
-           garbage.filter = F,
-           error.thresh = 10) {
+  function(play_by_play_data = NA, include_transition = F) {
 
-    #First user can decide if they want to keep or remove data from potentially corrupted games
-    if (keep.dirty == F) {
-      # Takes only rows from clean games or when there are errors less than the specified threshold
-      lineup_stuff <- play_by_play_data %>%
-        dplyr::filter(Sub_Deviate <= error.thresh)
-
-      #Report how many rows that were deemed dirty were removed
-      message(paste0(round((nrow(play_by_play_data) - nrow(lineup_stuff)) /
-                             nrow(play_by_play_data), 2
-      ) * 100, "% dirty rows removed"))
-    } else{
-      lineup_stuff <- play_by_play_data
-    }
-    #User can also remove rows that are deemed to occur in garbage time
-    if (garbage.filter == T) {
-      # This roughly follows the cleaningtheglass criteria, but is made a little different
-      # because of the different rules and time structures of college basketball
-      # definitely willing to change this
-      # follows rule a game that enters garbage time cannot exit even if a team comes back
-      # A team is: Up by 25+ with 5 mins gone in 2nd half, up 20 with 10 mins gone in 2nd half,
-      # up 15 with 16 mins gone in 2nd half
-      lineup_stuff <- lineup_stuff %>%
-        dplyr::filter(Garbage_Time == F)
-    }
-
-    missing_rows <- apply(lineup_stuff[,22:31], 1, function(x){sum(is.na(x))})
+    missing_rows <- apply(play_by_play_data[,which(colnames(play_by_play_data)=="Home.1"):which(colnames(play_by_play_data)=="Away.5")], 1, function(x){sum(is.na(x))})
     message(paste("Forced to remove", length(which(missing_rows!=0)), "rows due to missing players in on/off"))
 
-    lineup_stuff <- lineup_stuff %>%
-      filter(missing_rows==0)
+    lineup_stuff <- play_by_play_data %>%
+      dplyr::filter(missing_rows==0) %>%
+      dplyr::filter(!Event_Type %in% c("Enters Game", "Leaves Game"))
 
     # Now sorts the home and away player alphabetically so players are always in the same column for a given lineup
     lineup_stuff2 <- apply(lineup_stuff, 1, function(x)
     {
-      home_players <- sort(x[22:26])
-      away_players <- sort(x[27:31])
-      return(c(x[1:21], home_players, away_players, x[32:34]))
+      home_players <- sort(x[which(colnames(lineup_stuff)=="Home.1"):which(colnames(lineup_stuff)=="Home.5")])
+      away_players <- sort(x[which(colnames(lineup_stuff)=="Away.1"):which(colnames(lineup_stuff)=="Away.5")])
+      return(c(x[1:(which(colnames(lineup_stuff)=="Home.1")-1)], home_players, away_players, x[(which(colnames(lineup_stuff)=="Away.5")+1):ncol(lineup_stuff)]))
     })
 
     #Converts the sorted back into a data frame
     lineup_stuff2 <-
-      data.frame(matrix(unlist(lineup_stuff2), ncol = 34, byrow = T), stringsAsFactors = F)
+      data.frame(matrix(unlist(lineup_stuff2), ncol = ncol(lineup_stuff), byrow = T), stringsAsFactors = F)
 
     colnames(lineup_stuff2) <- colnames(play_by_play_data)
 
@@ -1743,64 +1753,71 @@ get_lineups <-
     #o is used to denote opponents
     suppressMessages(
     home_lineups <- lineup_stuff2 %>%
-      # dplyr::mutate_if(is.factor, as.character) %>%
       dplyr::group_by(Home.1, Home.2, Home.3, Home.4, Home.5, Home) %>%
       dplyr::mutate(Shot_Value = as.numeric(Shot_Value),
-             Event_Length = as.numeric(Event_Length)) %>%
+             Event_Length = as.numeric(Event_Length),
+             POSS_num = ifelse(Poss_Team == Home, as.numeric(Poss_Num), NA),
+             dPOSS_num = ifelse(Poss_Team == Away, as.numeric(Poss_Num), NA)
+             ) %>%
       dplyr::summarise(
-        #can sub event lengths to get total amount of time across entries
-        Mins = sum(Event_Length / 60, na.rm = T),
+        #can sum event lengths to get total amount of time across entries
+        Mins = sum(Event_Length, na.rm = T)/60,
+        oMins = sum(Event_Length * !is.na(POSS_num), na.rm = T)/60,
+        dMins = sum(Event_Length * !is.na(dPOSS_num), na.rm = T)/60,
+        # Get total possessions by the count of distinct possession numbers
+        oPOSS = dplyr::n_distinct(POSS_num, na.rm = T),
+        dPOSS = dplyr::n_distinct(dPOSS_num, na.rm = T),
         #points
         PTS = sum(
           (Event_Team == Home) * (Event_Result == "made") * Shot_Value, na.rm = T),
-        oPTS = sum(
+        dPTS = sum(
           (Event_Team == Away) * (Event_Result == "made") * Shot_Value, na.rm = T),
         #field goal attempts
         FGA = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Home) * 1, na.rm = T),
-        oFGA = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Away) * 1, na.rm = T),
+        dFGA = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Away) * 1, na.rm = T),
         #field goal makes
         FGM = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Home) * (Event_Result == "made") * 1, na.rm = T),
-        oFGM = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Away) * (Event_Result == "made") * 1, na.rm = T),
+        dFGM = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Away) * (Event_Result == "made") * 1, na.rm = T),
         #three point attempts
         TPA = sum((Shot_Value == 3) * (Event_Team == Home) * 1, na.rm = T),
-        oTPA = sum((Shot_Value == 3) * (Event_Team == Away) * 1, na.rm = T),
+        dTPA = sum((Shot_Value == 3) * (Event_Team == Away) * 1, na.rm = T),
         #three point makes
         TPM = sum((Shot_Value == 3) * (Event_Team == Home) * (Event_Result == "made") * 1, na.rm = T),
-        oTPM = sum((Shot_Value == 3) * (Event_Team == Away) * (Event_Result == "made") * 1, na.rm = T),
+        dTPM = sum((Shot_Value == 3) * (Event_Team == Away) * (Event_Result == "made") * 1, na.rm = T),
         #free throw attempts
         FTA = sum((Shot_Value == 1) * (Event_Team == Home) * 1, na.rm = T),
-        oFTA = sum((Shot_Value == 1) * (Event_Team == Away) * 1, na.rm = T),
+        dFTA = sum((Shot_Value == 1) * (Event_Team == Away) * 1, na.rm = T),
         #free throw makes
         FTM = sum((Shot_Value == 1) * (Event_Team == Home) * (Event_Result == "made") * 1, na.rm = T),
-        oFTM = sum((Shot_Value == 1) * (Event_Team == Away) * (Event_Result == "made") * 1, na.rm = T),
+        dFTM = sum((Shot_Value == 1) * (Event_Team == Away) * (Event_Result == "made") * 1, na.rm = T),
         #rough estimate of rim attempts using terminology of ncaa
         RIMA = sum((
           Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
         ) * (Event_Team == Home) * 1, na.rm = T),
-        oRIMA = sum((
+        dRIMA = sum((
           Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
         ) * (Event_Team == Away) * 1, na.rm = T),
         RIMM = sum((Event_Result == "made") * (
           Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
         ) * (Event_Team == Home) * 1, na.rm = T),
-        oRIMM = sum((Event_Result == "made") * (
+        dRIMM = sum((Event_Result == "made") * (
           Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
         ) * (Event_Team == Away) * 1, na.rm = T),
         #offensive rebounds
         ORB = sum((Event_Type == "Offensive Rebound") * (Event_Team == Home) * 1, na.rm = T),
-        oORB = sum((Event_Type == "Offensive Rebound") * (Event_Team == Away) * 1, na.rm = T),
+        dORB = sum((Event_Type == "Offensive Rebound") * (Event_Team == Away) * 1, na.rm = T),
         #defensive rebounds
         DRB = sum((Event_Type == "Defensive Rebound") * (Event_Team == Home) * 1, na.rm = T),
-        oDRB = sum((Event_Type == "Defensive Rebound") * (Event_Team == Away) * 1, na.rm = T),
+        dDRB = sum((Event_Type == "Defensive Rebound") * (Event_Team == Away) * 1, na.rm = T),
         #blocked shots
         BLK = sum((Event_Type == "Blocked Shot") * (Event_Team == Home) * 1, na.rm = T),
-        oBLK = sum((Event_Type == "Blocked Shot") * (Event_Team == Away) * 1, na.rm = T),
+        dBLK = sum((Event_Type == "Blocked Shot") * (Event_Team == Away) * 1, na.rm = T),
         #turnovers
         TO = sum((Event_Type == "Turnover") * (Event_Team == Home) * 1, na.rm = T),
-        oTO = sum((Event_Type == "Turnover") * (Event_Team == Away) * 1, na.rm = T),
+        dTO = sum((Event_Type == "Turnover") * (Event_Team == Away) * 1, na.rm = T),
         #assists
         AST = sum((!is.na(Player_2)) * (Event_Team == Home) * 1, na.rm = T),
-        oAST =  sum((!is.na(Player_2)) * (Event_Team == Away) * 1, na.rm = T)
+        dAST =  sum((!is.na(Player_2)) * (Event_Team == Away) * 1, na.rm = T)
       ) %>%
       dplyr::rename(
         P1 = Home.1,
@@ -1810,51 +1827,185 @@ get_lineups <-
         P5 = Home.5,
         Team = Home
       ))
+
+    # Now calculate optional half-court + transition
+    if(include_transition) {
+      suppressMessages(
+        home_lineups_trans <- lineup_stuff2 %>%
+          dplyr::group_by(Home.1, Home.2, Home.3, Home.4, Home.5, Home) %>%
+          dplyr::mutate(Shot_Value = as.numeric(Shot_Value),
+                        Event_Length = as.numeric(Event_Length),
+                        isTransition = as.logical(isTransition)*1,
+                        isHalfCourt = 1-isTransition,
+                        POSS_num = ifelse(Poss_Team == Home, as.numeric(Poss_Num), NA),
+                        dPOSS_num = ifelse(Poss_Team == Away, as.numeric(Poss_Num), NA)
+          ) %>%
+          dplyr::summarise(
+            #can sum event lengths to get total amount of time across entries
+            Mins_trans = sum(Event_Length * isTransition, na.rm = T)/60,
+            oMins_trans = sum(Event_Length * (!is.na(POSS_num)*1) * isTransition, na.rm = T)/60,
+            dMins_trans = sum(Event_Length * (!is.na(dPOSS_num)*1) * isTransition, na.rm = T)/60,
+            # Get total possessions by the count of distinct possession numbers
+            oPOSS_trans = dplyr::n_distinct(POSS_num *ifelse(isTransition == 1, 1, NA), na.rm = T),
+            dPOSS_trans = dplyr::n_distinct(dPOSS_num*ifelse(isTransition == 1, 1, NA), na.rm = T),
+            #points
+            PTS_trans = sum(
+              (Event_Team == Home) * (Event_Result == "made") * Shot_Value * isTransition, na.rm = T),
+            dPTS_trans = sum(
+              (Event_Team == Away) * (Event_Result == "made") * Shot_Value * isTransition, na.rm = T),
+            #field goal attempts
+            FGA_trans = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Home) * isTransition, na.rm = T),
+            dFGA_trans = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Away) * isTransition, na.rm = T),
+            #field goal makes
+            FGM_trans = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Home) * (Event_Result == "made") * isTransition, na.rm = T),
+            dFGM_trans = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Away) * (Event_Result == "made") * isTransition, na.rm = T),
+            #three point attempts
+            TPA_trans = sum((Shot_Value == 3) * (Event_Team == Home) * isTransition, na.rm = T),
+            dTPA_trans = sum((Shot_Value == 3) * (Event_Team == Away) * isTransition, na.rm = T),
+            #three point makes
+            TPM_trans = sum((Shot_Value == 3) * (Event_Team == Home) * (Event_Result == "made") * isTransition, na.rm = T),
+            dTPM_trans = sum((Shot_Value == 3) * (Event_Team == Away) * (Event_Result == "made") * isTransition, na.rm = T),
+            #free throw attempts
+            FTA_trans = sum((Shot_Value == 1) * (Event_Team == Home) * isTransition, na.rm = T),
+            dFTA_trans = sum((Shot_Value == 1) * (Event_Team == Away) * isTransition, na.rm = T),
+            #free throw makes
+            FTM_trans = sum((Shot_Value == 1) * (Event_Team == Home) * (Event_Result == "made") * isTransition, na.rm = T),
+            dFTM_trans = sum((Shot_Value == 1) * (Event_Team == Away) * (Event_Result == "made") * isTransition, na.rm = T),
+            #rough estimate of rim attempts using terminology of ncaa
+            RIMA_trans = sum((
+              Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+            ) * (Event_Team == Home) * isTransition, na.rm = T),
+            dRIMA_trans = sum((
+              Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+            ) * (Event_Team == Away) * isTransition, na.rm = T),
+            RIMM_trans = sum((Event_Result == "made") * (
+              Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+            ) * (Event_Team == Home) * isTransition, na.rm = T),
+            dRIMM_trans = sum((Event_Result == "made") * (
+              Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+            ) * (Event_Team == Away) * isTransition, na.rm = T),
+            #offensive rebounds
+            ORB_trans = sum((Event_Type == "Offensive Rebound") * (Event_Team == Home) * isTransition, na.rm = T),
+            dORB_trans = sum((Event_Type == "Offensive Rebound") * (Event_Team == Away) * isTransition, na.rm = T),
+            #defensive rebounds
+            DRB_trans = sum((Event_Type == "Defensive Rebound") * (Event_Team == Home) * isTransition, na.rm = T),
+            dDRB_trans = sum((Event_Type == "Defensive Rebound") * (Event_Team == Away) * isTransition, na.rm = T),
+            #blocked shots
+            BLK_trans = sum((Event_Type == "Blocked Shot") * (Event_Team == Home) * isTransition, na.rm = T),
+            dBLK_trans = sum((Event_Type == "Blocked Shot") * (Event_Team == Away) * isTransition, na.rm = T),
+            #turnovers
+            TO_trans = sum((Event_Type == "Turnover") * (Event_Team == Home) * isTransition, na.rm = T),
+            dTO_trans = sum((Event_Type == "Turnover") * (Event_Team == Away) * isTransition, na.rm = T),
+            #assists
+            AST_trans = sum((!is.na(Player_2)) * (Event_Team == Home) * isTransition, na.rm = T),
+            dAST_trans =  sum((!is.na(Player_2)) * (Event_Team == Away) * isTransition, na.rm = T),
+          #HALF COURT
+            Mins_half = sum(Event_Length * isHalfCourt, na.rm = T)/60,
+            oMins_half = sum(Event_Length * (!is.na(POSS_num)*1) * isHalfCourt, na.rm = T)/60,
+            dMins_half = sum(Event_Length * (!is.na(dPOSS_num)*1) * isHalfCourt, na.rm = T)/60,
+            oPOSS_half = dplyr::n_distinct(POSS_num *ifelse(isHalfCourt == 1, 1, NA), na.rm = T),
+            dPOSS_half = dplyr::n_distinct(dPOSS_num*ifelse(isHalfCourt == 1, 1, NA), na.rm = T),
+            PTS_half = sum(
+              (Event_Team == Home) * (Event_Result == "made") * Shot_Value * isHalfCourt, na.rm = T),
+            dPTS_half = sum(
+              (Event_Team == Away) * (Event_Result == "made") * Shot_Value * isHalfCourt, na.rm = T),
+            FGA_half = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            dFGA_half = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            FGM_half = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Home) * (Event_Result == "made") * isHalfCourt, na.rm = T),
+            dFGM_half = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Away) * (Event_Result == "made") * isHalfCourt, na.rm = T),
+            TPA_half = sum((Shot_Value == 3) * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            dTPA_half = sum((Shot_Value == 3) * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            TPM_half = sum((Shot_Value == 3) * (Event_Team == Home) * (Event_Result == "made") * isHalfCourt, na.rm = T),
+            dTPM_half = sum((Shot_Value == 3) * (Event_Team == Away) * (Event_Result == "made") * isHalfCourt, na.rm = T),
+            FTA_half = sum((Shot_Value == 1) * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            dFTA_half = sum((Shot_Value == 1) * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            FTM_half = sum((Shot_Value == 1) * (Event_Team == Home) * (Event_Result == "made") * isHalfCourt, na.rm = T),
+            dFTM_half = sum((Shot_Value == 1) * (Event_Team == Away) * (Event_Result == "made") * isHalfCourt, na.rm = T),
+            RIMA_half = sum((
+              Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+            ) * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            dRIMA_half = sum((
+              Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+            ) * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            RIMM_half = sum((Event_Result == "made") * (
+              Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+            ) * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            dRIMM_half = sum((Event_Result == "made") * (
+              Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+            ) * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            ORB_half = sum((Event_Type == "Offensive Rebound") * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            dORB_half = sum((Event_Type == "Offensive Rebound") * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            DRB_half = sum((Event_Type == "Defensive Rebound") * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            dDRB_half = sum((Event_Type == "Defensive Rebound") * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            BLK_half = sum((Event_Type == "Blocked Shot") * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            dBLK_half = sum((Event_Type == "Blocked Shot") * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            TO_half = sum((Event_Type == "Turnover") * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            dTO_half = sum((Event_Type == "Turnover") * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            AST_half = sum((!is.na(Player_2)) * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            dAST_half =  sum((!is.na(Player_2)) * (Event_Team == Away) * isHalfCourt, na.rm = T)
+          ) %>%
+          dplyr::rename(
+            P1 = Home.1,
+            P2 = Home.2,
+            P3 = Home.3,
+            P4 = Home.4,
+            P5 = Home.5,
+            Team = Home
+          )
+          )
+    }
+
     #same done for away team
     suppressMessages(
     away_lineups <- lineup_stuff2 %>%
-      # dplyr::mutate_if(is.factor, as.character) %>%
       dplyr::group_by(Away.1, Away.2, Away.3, Away.4, Away.5, Away) %>%
       dplyr::mutate(Shot_Value = as.numeric(Shot_Value),
-             Event_Length = as.numeric(Event_Length)) %>%
+             Event_Length = as.numeric(Event_Length),
+             oPOSS = ifelse(Poss_Team == Away, as.numeric(Poss_Num), NA),
+             dPOSS = ifelse(Poss_Team == Home, as.numeric(Poss_Num), NA)
+             ) %>%
       dplyr::summarise(
         Mins = sum(Event_Length / 60, na.rm = T),
+        oMins = sum(Event_Length * !is.na(oPOSS), na.rm = T)/60,
+        dMins = sum(Event_Length * !is.na(dPOSS), na.rm = T)/60,
+        oPOSS = dplyr::n_distinct(oPOSS, na.rm = T),
+        dPOSS = dplyr::n_distinct(dPOSS, na.rm = T),
         PTS = sum((Event_Team == Away) * (Event_Result == "made") * Shot_Value, na.rm = T),
-        oPTS = sum((Event_Team == Home) * (Event_Result == "made") * Shot_Value,na.rm = T),
+        dPTS = sum((Event_Team == Home) * (Event_Result == "made") * Shot_Value,na.rm = T),
         FGA = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Away) * 1, na.rm = T),
-        oFGA = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Home) * 1, na.rm = T),
+        dFGA = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Home) * 1, na.rm = T),
         FGM = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Away) * (Event_Result == "made") * 1, na.rm = T),
-        oFGM = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Home) * (Event_Result == "made") * 1, na.rm = T),
+        dFGM = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Home) * (Event_Result == "made") * 1, na.rm = T),
         TPA = sum((Shot_Value == 3) * (Event_Team == Away) * 1, na.rm = T),
-        oTPA = sum((Shot_Value == 3) * (Event_Team == Home) * 1, na.rm = T),
+        dTPA = sum((Shot_Value == 3) * (Event_Team == Home) * 1, na.rm = T),
         TPM = sum((Shot_Value == 3) * (Event_Team == Away) * (Event_Result == "made") * 1, na.rm = T),
-        oTPM = sum((Shot_Value == 3) * (Event_Team == Home) * (Event_Result == "made") * 1, na.rm = T),
+        dTPM = sum((Shot_Value == 3) * (Event_Team == Home) * (Event_Result == "made") * 1, na.rm = T),
         FTA = sum((Shot_Value == 1) * (Event_Team == Away) * 1, na.rm = T),
-        oFTA = sum((Shot_Value == 1) * (Event_Team == Home) * 1, na.rm = T),
+        dFTA = sum((Shot_Value == 1) * (Event_Team == Home) * 1, na.rm = T),
         FTM = sum((Shot_Value == 1) * (Event_Team == Away) * (Event_Result == "made") * 1, na.rm = T),
-        oFTM = sum((Shot_Value == 1) * (Event_Team == Home) * (Event_Result == "made") * 1, na.rm = T),
+        dFTM = sum((Shot_Value == 1) * (Event_Team == Home) * (Event_Result == "made") * 1, na.rm = T),
         RIMA = sum((
           Event_Type %in% c("Dunk", "Layup", "Hook","Tip-In")
         ) * (Event_Team == Away) * 1, na.rm = T),
-        oRIMA = sum((
+        dRIMA = sum((
           Event_Type %in% c("Dunk", "Layup", "Hook","Tip-In")
         ) * (Event_Team == Home) * 1, na.rm = T),
         RIMM = sum((Event_Result == "made") * (
           Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
         ) * (Event_Team == Away) * 1, na.rm = T),
-        oRIMM = sum((Event_Result == "made") * (
+        dRIMM = sum((Event_Result == "made") * (
           Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
         ) * (Event_Team == Home) * 1, na.rm = T),
         ORB = sum((Event_Type == "Offensive Rebound") * (Event_Team == Away) * 1, na.rm = T),
-        oORB = sum((Event_Type == "Offensive Rebound") * (Event_Team == Home) * 1, na.rm = T),
+        dORB = sum((Event_Type == "Offensive Rebound") * (Event_Team == Home) * 1, na.rm = T),
         DRB = sum((Event_Type == "Defensive Rebound") * (Event_Team == Away) * 1, na.rm = T),
-        oDRB = sum((Event_Type == "Defensive Rebound") * (Event_Team == Home) * 1, na.rm = T),
+        dDRB = sum((Event_Type == "Defensive Rebound") * (Event_Team == Home) * 1, na.rm = T),
         BLK = sum((Event_Type == "Blocked Shot") * (Event_Team == Away) * 1, na.rm = T),
-        oBLK = sum((Event_Type == "Blocked Shot") * (Event_Team == Home) * 1, na.rm = T),
+        dBLK = sum((Event_Type == "Blocked Shot") * (Event_Team == Home) * 1, na.rm = T),
         TO = sum((Event_Type == "Turnover") * (Event_Team == Away) * 1, na.rm = T),
-        oTO = sum((Event_Type == "Turnover") * (Event_Team == Home) * 1, na.rm = T),
+        dTO = sum((Event_Type == "Turnover") * (Event_Team == Home) * 1, na.rm = T),
         AST = sum((!is.na(Player_2)) * (Event_Team == Away) * 1, na.rm = T),
-        oAST =  sum((!is.na(Player_2)) * (Event_Team == Home) * 1, na.rm = T)
+        dAST =  sum((!is.na(Player_2)) * (Event_Team == Home) * 1, na.rm = T)
       ) %>%
       dplyr::rename(
         P1 = Away.1,
@@ -1865,6 +2016,114 @@ get_lineups <-
         Team = Away
       ))
 
+    if(include_transition) {
+      suppressMessages(
+        away_lineups_trans <- lineup_stuff2 %>%
+          dplyr::group_by(Away.1, Away.2, Away.3, Away.4, Away.5, Away) %>%
+          dplyr::mutate(Shot_Value = as.numeric(Shot_Value),
+                        Event_Length = as.numeric(Event_Length),
+                        isTransition = as.logical(isTransition)*1,
+                        isHalfCourt = 1-isTransition,
+                        POSS_num = ifelse(Poss_Team == Away, as.numeric(Poss_Num), NA),
+                        dPOSS_num = ifelse(Poss_Team == Home, as.numeric(Poss_Num), NA)
+          ) %>%
+          dplyr::summarise(
+            Mins_trans = sum(Event_Length * isTransition, na.rm = T)/60,
+            oMins_trans = sum(Event_Length * !is.na(POSS_num) * isTransition, na.rm = T)/60,
+            dMins_trans = sum(Event_Length * !is.na(dPOSS_num) * isTransition, na.rm = T)/60,
+            # Get total possessions by the count of distinct possession numbers
+            oPOSS_trans = dplyr::n_distinct(POSS_num *ifelse(isTransition == 1, 1, NA), na.rm = T),
+            dPOSS_trans = dplyr::n_distinct(dPOSS_num*ifelse(isTransition == 1, 1, NA), na.rm = T),
+            PTS_trans = sum((Event_Team == Away) * (Event_Result == "made") * Shot_Value * isTransition, na.rm = T),
+            dPTS_trans = sum((Event_Team == Home) * (Event_Result == "made") * Shot_Value * isTransition,na.rm = T),
+            FGA_trans = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Away) * isTransition, na.rm = T),
+            dFGA_trans = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Home) * isTransition, na.rm = T),
+            FGM_trans = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Away) * (Event_Result == "made") * isTransition, na.rm = T),
+            dFGM_trans= sum((Shot_Value %in% c(2, 3)) * (Event_Team == Home) * (Event_Result == "made") * isTransition, na.rm = T),
+            TPA_trans = sum((Shot_Value == 3) * (Event_Team == Away) * isTransition, na.rm = T),
+            dTPA_trans = sum((Shot_Value == 3) * (Event_Team == Home) * isTransition, na.rm = T),
+            TPM_trans = sum((Shot_Value == 3) * (Event_Team == Away) * (Event_Result == "made") * isTransition, na.rm = T),
+            dTPM_trans = sum((Shot_Value == 3) * (Event_Team == Home) * (Event_Result == "made") * isTransition, na.rm = T),
+            FTA_trans = sum((Shot_Value == 1) * (Event_Team == Away) * isTransition, na.rm = T),
+            dFTA_trans = sum((Shot_Value == 1) * (Event_Team == Home) * isTransition, na.rm = T),
+            FTM_trans = sum((Shot_Value == 1) * (Event_Team == Away) * (Event_Result == "made") * isTransition, na.rm = T),
+            dFTM_trans = sum((Shot_Value == 1) * (Event_Team == Home) * (Event_Result == "made") * isTransition, na.rm = T),
+            RIMA_trans = sum((
+              Event_Type %in% c("Dunk", "Layup", "Hook","Tip-In")
+            ) * (Event_Team == Away) * isTransition, na.rm = T),
+            dRIMA_trans = sum((
+              Event_Type %in% c("Dunk", "Layup", "Hook","Tip-In")
+            ) * (Event_Team == Home) * isTransition, na.rm = T),
+            RIMM_trans = sum((Event_Result == "made") * (
+              Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+            ) * (Event_Team == Away) * isTransition, na.rm = T),
+            dRIMM_trans = sum((Event_Result == "made") * (
+              Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+            ) * (Event_Team == Home) * isTransition, na.rm = T),
+            ORB_trans = sum((Event_Type == "Offensive Rebound") * (Event_Team == Away) * isTransition, na.rm = T),
+            dORB_trans = sum((Event_Type == "Offensive Rebound") * (Event_Team == Home) * isTransition, na.rm = T),
+            DRB_trans = sum((Event_Type == "Defensive Rebound") * (Event_Team == Away) * isTransition, na.rm = T),
+            dDRB_trans = sum((Event_Type == "Defensive Rebound") * (Event_Team == Home) * isTransition, na.rm = T),
+            BLK_trans = sum((Event_Type == "Blocked Shot") * (Event_Team == Away) * isTransition, na.rm = T),
+            dBLK_trans = sum((Event_Type == "Blocked Shot") * (Event_Team == Home) * isTransition, na.rm = T),
+            TO_trans = sum((Event_Type == "Turnover") * (Event_Team == Away) * isTransition, na.rm = T),
+            dTO_trans = sum((Event_Type == "Turnover") * (Event_Team == Home) * isTransition, na.rm = T),
+            AST_trans = sum((!is.na(Player_2)) * (Event_Team == Away) * isTransition, na.rm = T),
+            dAST_trans =  sum((!is.na(Player_2)) * (Event_Team == Home) * isTransition, na.rm = T),
+            # HALF COURT
+            Mins_half = sum(Event_Length * isHalfCourt, na.rm = T)/60,
+            oMins_half = sum(Event_Length * !is.na(POSS_num) * isHalfCourt, na.rm = T)/60,
+            dMins_half = sum(Event_Length * !is.na(dPOSS_num) * isHalfCourt, na.rm = T)/60,
+            # Get total possessions by the count of distinct possession numbers
+            oPOSS_half = dplyr::n_distinct(POSS_num *ifelse(isHalfCourt == 1, 1, NA), na.rm = T),
+            dPOSS_half = dplyr::n_distinct(dPOSS_num*ifelse(isHalfCourt == 1, 1, NA), na.rm = T),
+            PTS_half = sum((Event_Team == Away) * (Event_Result == "made") * Shot_Value * isHalfCourt, na.rm = T),
+            dPTS_half = sum((Event_Team == Home) * (Event_Result == "made") * Shot_Value * isHalfCourt,na.rm = T),
+            FGA_half = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            dFGA_half = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            FGM_half = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Away) * (Event_Result == "made") * isHalfCourt, na.rm = T),
+            dFGM_half= sum((Shot_Value %in% c(2, 3)) * (Event_Team == Home) * (Event_Result == "made") * isHalfCourt, na.rm = T),
+            TPA_half = sum((Shot_Value == 3) * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            dTPA_half = sum((Shot_Value == 3) * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            TPM_half = sum((Shot_Value == 3) * (Event_Team == Away) * (Event_Result == "made") * isHalfCourt, na.rm = T),
+            dTPM_half = sum((Shot_Value == 3) * (Event_Team == Home) * (Event_Result == "made") * isHalfCourt, na.rm = T),
+            FTA_half = sum((Shot_Value == 1) * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            dFTA_half = sum((Shot_Value == 1) * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            FTM_half = sum((Shot_Value == 1) * (Event_Team == Away) * (Event_Result == "made") * isHalfCourt, na.rm = T),
+            dFTM_half = sum((Shot_Value == 1) * (Event_Team == Home) * (Event_Result == "made") * isHalfCourt, na.rm = T),
+            RIMA_half = sum((
+              Event_Type %in% c("Dunk", "Layup", "Hook","Tip-In")
+            ) * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            dRIMA_half = sum((
+              Event_Type %in% c("Dunk", "Layup", "Hook","Tip-In")
+            ) * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            RIMM_half = sum((Event_Result == "made") * (
+              Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+            ) * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            dRIMM_half = sum((Event_Result == "made") * (
+              Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+            ) * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            ORB_half = sum((Event_Type == "Offensive Rebound") * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            dORB_half = sum((Event_Type == "Offensive Rebound") * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            DRB_half = sum((Event_Type == "Defensive Rebound") * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            dDRB_half = sum((Event_Type == "Defensive Rebound") * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            BLK_half = sum((Event_Type == "Blocked Shot") * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            dBLK_half = sum((Event_Type == "Blocked Shot") * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            TO_half = sum((Event_Type == "Turnover") * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            dTO_half = sum((Event_Type == "Turnover") * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            AST_half = sum((!is.na(Player_2)) * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            dAST_half =  sum((!is.na(Player_2)) * (Event_Team == Home) * isHalfCourt, na.rm = T)
+          ) %>%
+          dplyr::rename(
+            P1 = Away.1,
+            P2 = Away.2,
+            P3 = Away.3,
+            P4 = Away.4,
+            P5 = Away.5,
+            Team = Away
+          ))
+    }
+
     #combine lineups from home and away and calculate a variety of stats
     suppressMessages(
     lineups <- dplyr::bind_rows(home_lineups, away_lineups) %>%
@@ -1872,75 +2131,186 @@ get_lineups <-
       dplyr::summarise_if(is.numeric, sum) %>%
       dplyr::mutate(
         #estimate of possesions using common formula
-        POSS = ceiling(FGA + .475*FTA - ORB + TO),
-        oPOSS = ceiling(oFGA + .475*oFTA - oORB + oTO),
-        ePOSS = (POSS + oPOSS) / 2,
+        ePOSS = (round(FGA + .475*FTA - ORB + TO) + round(dFGA + .475*dFTA - dORB + dTO)) / 2,
         #efficiency scaled to points per 100 possessions
-        ORTG = PTS / ePOSS * 100,
-        DRTG = oPTS / ePOSS * 100,
+        ORTG = PTS / oPOSS * 100,
+        DRTG = dPTS / dPOSS * 100,
         NETRTG = ORTG - DRTG,
         # field goal percentage
         FG. = FGM / FGA,
-        oFG. = oFGM / oFGA,
+        dFG. = dFGM / dFGA,
         #three point percentage
         TPP = TPM / TPA,
-        oTPP = oTPM / oTPA,
+        dTPP = dTPM / dTPA,
         #free throw percentage
         FTP = FTM / FTA,
-        oFTP = oFTM / oFTA,
+        dFTP = dFTM / dFTA,
         #effective shooting percentage
         eFG. = (FGM + 0.5 * TPM) / FGA,
-        oeFG. = (oFGM + 0.5 * oTPM) / oFGA,
+        deFG. = (dFGM + 0.5 * dTPM) / dFGA,
         #true shooting percentage
         TS. = (PTS / 2) / (FGA + .475 * FTA),
-        oTS. = (oPTS / 2) / (oFGA + .475 * oFTA),
+        dTS. = (dPTS / 2) / (dFGA + .475 * dFTA),
         # rim field goal percentage
         RIM. = RIMM / RIMA,
-        oRIM. = oRIMM / oRIMA,
+        dRIM. = dRIMM / dRIMA,
         # midrange field goal percentage
         MID. = (FGM - RIMM - TPM) / (FGA - RIMA - TPA),
-        oMID. = (oFGM - oRIMM - oTPM) / (oFGA - oRIMA - oTPA),
+        dMID. = (dFGM - dRIMM - dTPM) / (dFGA - dRIMA - dTPA),
         #% of fga that are threes
         TPrate = TPA / FGA,
-        oTPrate = oTPA / oFGA,
+        dTPrate = dTPA / dFGA,
         #% of fga at the rim
         RIMrate = RIMA / FGA,
-        oRIMrate = oRIMA / oFGA,
+        dRIMrate = dRIMA / dFGA,
         #%midrange fga
         MIDrate = (FGA - TPA - RIMA) / FGA,
-        oMIDrate = (oFGA - oTPA - oRIMA) / oFGA,
+        dMIDrate = (dFGA - dTPA - dRIMA) / dFGA,
         #rate of free throw attempts per field goal attempt
         FTrate = FTA / FGA,
-        oFTrate = oFTA / oFGA,
+        dFTrate = dFTA / dFGA,
         #percentage of makes that are assisted
         ASTrate = AST / FGM,
-        oASTrate = oAST / oFGM,
+        dASTrate = dAST / dFGM,
         #percentage of possessions ending with turnovers
-        TOrate = TO / POSS,
-        oTOrate = oTO / POSS,
+        TOrate = TO / oPOSS,
+        dTOrate = dTO / dPOSS,
         #rate that team blocks shots (so defensively) per opponent attempt
-        BLKrate = BLK / oFGA,
-        oBLKrate = oBLK / FGA,
+        BLKrate = BLK / dFGA,
+        oBLKrate = dBLK / FGA,
         #rebounding percentages
-        ORB. = ORB / (ORB + oDRB),
-        DRB. = DRB / (DRB + oORB),
-        # time per possession in  seconds
-        PACE = (Mins / ePOSS) * 30,
-        #estimate of shots per possesion
-        ShotsPerPoss = 1 + (ORB - TO) / POSS,
-        oShotsPerPoss = 1 + (oORB - oTO) / oPOSS
+        ORB. = ORB / (ORB + dDRB),
+        DRB. = DRB / (DRB + dORB),
+        # time per possession in  seconds = Mins per possession
+        TimePerPoss = (oMins / oPOSS) * 60,
+        dTimePerPoss = (dMins / dPOSS) * 60
       ) %>%
       #no need to have long decimals so round everything
-      dplyr::mutate_if(is.numeric, ~ round(., 3)) %>%
+      dplyr::mutate(across(where(is.numeric), ~ round(., 3))) %>%
       dplyr::ungroup() %>%
-      # dplyr::filter(Mins > 0) %>%
-      dplyr::select(P1:Team, Mins, PTS, oPTS, POSS:oShotsPerPoss, dplyr::everything()))
+      dplyr::select(P1:Team, Mins:dPOSS, ORTG:NETRTG, dplyr::everything()))
     #change any NA/infinite/etc. that comes up in calculations to 0
     lineups[is.na(lineups)] <- 0
-    lineups[,7:74] <- apply(lineups[,7:74], 2, function(x){ifelse(is.infinite(x),0,x)})
+    lineups[,7:ncol(lineups)] <- apply(lineups[,7:ncol(lineups)], 2, function(x){ifelse(is.infinite(x),0,x)})
+
+    if(include_transition) {
+      #combine lineups from home and away and calculate a variety of stats
+      suppressMessages(
+        lineups_trans <- dplyr::bind_rows(home_lineups_trans, away_lineups_trans) %>%
+          dplyr::group_by(P1, P2, P3, P4, P5, Team) %>%
+          dplyr::summarise_if(is.numeric, sum) %>%
+          dplyr::ungroup() %>%
+          dplyr::mutate(
+            ORTG_trans = PTS_trans / oPOSS_trans * 100,
+            DRTG_trans = dPTS_trans / dPOSS_trans * 100,
+            NETRTG_trans = ORTG_trans - DRTG_trans,
+            FG._trans = FGM_trans / FGA_trans,
+            dFG._trans = dFGM_trans / dFGA_trans,
+            TPP_trans = TPM_trans / TPA_trans,
+            dTPP_trans = dTPM_trans / dTPA_trans,
+            FTP_trans = FTM_trans / FTA_trans,
+            dFTP_trans = dFTM_trans / dFTA_trans,
+            eFG._trans = (FGM_trans + 0.5 * TPM_trans) / FGA_trans,
+            deFG._trans = (dFGM_trans + 0.5 * dTPM_trans) / dFGA_trans,
+            TS._trans = (PTS_trans / 2) / (FGA_trans + .475 * FTA_trans),
+            dTS._trans = (dPTS_trans / 2) / (dFGA_trans + .475 * dFTA_trans),
+            RIM._trans = RIMM_trans / RIMA_trans,
+            dRIM._trans = dRIMM_trans / dRIMA_trans,
+            MID._trans = (FGM_trans - RIMM_trans - TPM_trans) / (FGA_trans - RIMA_trans - TPA_trans),
+            dMID._trans = (dFGM_trans - dRIMM_trans - dTPM_trans) / (dFGA_trans - dRIMA_trans - dTPA_trans),
+            TPrate_trans = TPA_trans / FGA_trans,
+            dTPrate_trans = dTPA_trans / dFGA_trans,
+            RIMrate_trans = RIMA_trans / FGA_trans,
+            dRIMrate_trans = dRIMA_trans / dFGA_trans,
+            MIDrate_trans = (FGA_trans - TPA_trans - RIMA_trans) / FGA_trans,
+            dMIDrate_trans = (dFGA_trans - dTPA_trans - dRIMA_trans) / dFGA_trans,
+            FTrate_trans = FTA_trans / FGA_trans,
+            dFTrate_trans = dFTA_trans / dFGA_trans,
+            ASTrate_trans = AST_trans / FGM_trans,
+            dASTrate_trans = dAST_trans / dFGM_trans,
+            TOrate_trans = TO_trans / oPOSS_trans,
+            dTOrate_trans = dTO_trans / dPOSS_trans,
+            BLKrate_trans = BLK_trans / dFGA_trans,
+            oBLKrate_trans = dBLK_trans / FGA_trans,
+            ORB._trans = ORB_trans / (ORB_trans + dDRB_trans),
+            DRB._trans = DRB_trans / (DRB_trans + dORB_trans),
+            TimePerPoss_trans = (oMins_trans / oPOSS_trans) * 60,
+            dTimePerPoss_trans = (dMins_trans / dPOSS_trans) * 60,
+            ORTG_half = PTS_half / oPOSS_half * 100,
+            DRTG_half = dPTS_half / dPOSS_half * 100,
+            NETRTG_half = ORTG_half - DRTG_half,
+            FG._half = FGM_half / FGA_half,
+            dFG._half = dFGM_half / dFGA_half,
+            TPP_half = TPM_half / TPA_half,
+            dTPP_half = dTPM_half / dTPA_half,
+            FTP_half = FTM_half / FTA_half,
+            dFTP_half = dFTM_half / dFTA_half,
+            eFG._half = (FGM_half + 0.5 * TPM_half) / FGA_half,
+            deFG._half = (dFGM_half + 0.5 * dTPM_half) / dFGA_half,
+            TS._half = (PTS_half / 2) / (FGA_half + .475 * FTA_half),
+            dTS._half = (dPTS_half / 2) / (dFGA_half + .475 * dFTA_half),
+            RIM._half = RIMM_half / RIMA_half,
+            dRIM._half = dRIMM_half / dRIMA_half,
+            MID._half = (FGM_half - RIMM_half - TPM_half) / (FGA_half - RIMA_half - TPA_half),
+            dMID._half = (dFGM_half - dRIMM_half - dTPM_half) / (dFGA_half - dRIMA_half - dTPA_half),
+            TPrate_half = TPA_half / FGA_half,
+            dTPrate_half = dTPA_half / dFGA_half,
+            RIMrate_half = RIMA_half / FGA_half,
+            dRIMrate_half = dRIMA_half / dFGA_half,
+            MIDrate_half = (FGA_half - TPA_half - RIMA_half) / FGA_half,
+            dMIDrate_half = (dFGA_half - dTPA_half - dRIMA_half) / dFGA_half,
+            FTrate_half = FTA_half / FGA_half,
+            dFTrate_half = dFTA_half / dFGA_half,
+            ASTrate_half = AST_half / FGM_half,
+            dASTrate_half = dAST_half / dFGM_half,
+            TOrate_half = TO_half / oPOSS_half,
+            dTOrate_half = dTO_half / dPOSS_half,
+            BLKrate_half = BLK_half / dFGA_half,
+            oBLKrate_half = dBLK_half / FGA_half,
+            ORB._half = ORB_half / (ORB_half + dDRB_half),
+            DRB._half = DRB_half / (DRB_half + dORB_half),
+            TimePerPoss_half = (oMins_half / oPOSS_half) * 60,
+            dTimePerPoss_half = (dMins_half / dPOSS_half) * 60
+            # HALF COURT
+          ) %>%
+          #no need to have long decimals so round everything
+          dplyr::mutate(across(where(is.numeric), ~ round(., 3))) %>%
+          dplyr::ungroup()
+      )
+      #change any NA/infinite/etc. that comes up in calculations to 0
+      lineups_trans[is.na(lineups_trans)] <- 0
+      lineups_trans[,7:ncol(lineups_trans)] <- apply(lineups_trans[,7:ncol(lineups_trans)], 2, function(x){ifelse(is.infinite(x),0,x)})
+
+      lineups_combo <- lineups %>%
+        dplyr::left_join(
+          lineups_trans, by = c("P1", "P2", "P3", "P4", "P5", "Team")
+        ) %>%
+       dplyr:: mutate(
+          oTransPCT = oPOSS_trans / oPOSS,
+          dTransPCT = dPOSS_trans / dPOSS
+        ) %>%
+        select(P1:dTimePerPoss, oTransPCT, dTransPCT, Mins_trans:dTimePerPoss_half)
+
+      return(lineups_combo)
+    }
 
     return(lineups)
-}
+  }
+
+#' Team Stats Function
+#'
+#' This function takes in pbp data and calculates team level stats
+#' @param play_by_play_data data frame consisting of play-by-play data from the functions scrape_game() or get_play_by_play()
+#' @import dplyr
+#' @export
+#' @return data frame with each row representing a team
+get_team_stats <-
+  function(play_by_play_data = NA, include_transition = F) {
+    team_data <- play_by_play_data %>%
+      dplyr::mutate(across(Home.1:Away.5, ~""))
+    team_stats <- get_lineups(team_data, include_transition) %>%
+      dplyr::select(-P1:-P5)
+  }
 
 #' On-Off Comparison Function
 #'
@@ -1961,7 +2331,9 @@ on_off_generator <-
   function(Players,
            Lineup_Data,
            Included = NA,
-           Excluded = NA) {
+           Excluded = NA,
+           include_transition = F
+           ) {
 
     #first find which team is being looked for from the players mentioned
     find_team <- unique(
@@ -2021,46 +2393,127 @@ on_off_generator <-
     #convert to get metrics defined previously
     final <- final %>%
       dplyr::mutate(
-        ORTG = PTS / ePOSS * 100,
-        DRTG = oPTS / ePOSS * 100,
+        ePOSS = (round(FGA + .475*FTA - ORB + TO) + round(dFGA + .475*dFTA - dORB + dTO)) / 2,
+        ORTG = PTS / oPOSS * 100,
+        DRTG = dPTS / dPOSS * 100,
         NETRTG = ORTG - DRTG,
         FG. = FGM / FGA,
-        oFG. = oFGM / oFGA,
+        dFG. = dFGM / dFGA,
         TPP = TPM / TPA,
-        oTPP = oTPM / oTPA,
+        dTPP = dTPM / dTPA,
         FTP = FTM / FTA,
-        oFTP = oFTM / oFTA,
+        dFTP = dFTM / dFTA,
         eFG. = (FGM + 0.5 * TPM) / FGA,
-        oeFG. = (oFGM + 0.5 * oTPM) / oFGA,
+        deFG. = (dFGM + 0.5 * dTPM) / dFGA,
         TS. = (PTS / 2) / (FGA + .475 * FTA),
-        oTS. = (oPTS / 2) / (oFGA + .475 * oFTA),
+        dTS. = (dPTS / 2) / (dFGA + .475 * dFTA),
         RIM. = RIMM / RIMA,
-        oRIM. = oRIMM / oRIMA,
-        MID. = (FGM - TPM - RIMM) / (FGA - TPA - RIMA),
-        oMID. = (oFGM - oTPM - oRIMM) / (oFGA - oTPA - oRIMA),
+        dRIM. = dRIMM / dRIMA,
+        MID. = (FGM - RIMM - TPM) / (FGA - RIMA - TPA),
+        dMID. = (dFGM - dRIMM - dTPM) / (dFGA - dRIMA - dTPA),
         TPrate = TPA / FGA,
-        oTPrate = oTPA / oFGA,
+        dTPrate = dTPA / dFGA,
         RIMrate = RIMA / FGA,
-        oRIMrate = oRIMA / oFGA,
-        MIDrate = (FGA - RIMA - TPA) / FGA,
-        oMIDrate = (oFGA - oRIMA - oTPA) / oFGA,
+        dRIMrate = dRIMA / dFGA,
+        MIDrate = (FGA - TPA - RIMA) / FGA,
+        dMIDrate = (dFGA - dTPA - dRIMA) / dFGA,
         FTrate = FTA / FGA,
-        oFTrate = oFTA / oFGA,
+        dFTrate = dFTA / dFGA,
         ASTrate = AST / FGM,
-        oASTrate = oAST / oFGM,
-        TOrate = TO / POSS,
-        oTOrate = oTO / POSS,
-        BLKrate = BLK / oFGA,
-        oBLKrate = oBLK / FGA,
-        ORB. = ORB / (ORB + oDRB),
-        DRB. = DRB / (DRB + oORB),
-        PACE = (Mins / ePOSS) * 30,
-        ShotsPerPoss = 1 + (ORB - TO) / POSS,
-        oShotsPerPoss = 1 + (oORB - oTO) / oPOSS,
+        dASTrate = dAST / dFGM,
+        TOrate = TO / oPOSS,
+        dTOrate = dTO / dPOSS,
+        BLKrate = BLK / dFGA,
+        oBLKrate = dBLK / FGA,
+        ORB. = ORB / (ORB + dDRB),
+        DRB. = DRB / (DRB + dORB),
+        TimePerPoss = (oMins / oPOSS) * 60,
+        dTimePerPoss = (dMins / dPOSS) * 60
       ) %>%
-      dplyr::select(Status, Mins:oPTS, POSS:NETRTG, everything())
+      dplyr::mutate(across(where(is.numeric), ~ round(., 3))) %>%
+      dplyr::select(Status, Mins:PTS, oPOSS:NETRTG, everything())
     final[is.na(final)] <- 0
-    final[,2:69] <- apply(final[,2:69], 2, function(x){ifelse(is.infinite(x),0,x)})
+
+    if(include_transition) {
+      final <- final %>%
+        dplyr::mutate(
+          ORTG_trans = PTS_trans / oPOSS_trans * 100,
+          DRTG_trans = dPTS_trans / dPOSS_trans * 100,
+          NETRTG_trans = ORTG_trans - DRTG_trans,
+          FG._trans = FGM_trans / FGA_trans,
+          dFG._trans = dFGM_trans / dFGA_trans,
+          TPP_trans = TPM_trans / TPA_trans,
+          dTPP_trans = dTPM_trans / dTPA_trans,
+          FTP_trans = FTM_trans / FTA_trans,
+          dFTP_trans = dFTM_trans / dFTA_trans,
+          eFG._trans = (FGM_trans + 0.5 * TPM_trans) / FGA_trans,
+          deFG._trans = (dFGM_trans + 0.5 * dTPM_trans) / dFGA_trans,
+          TS._trans = (PTS_trans / 2) / (FGA_trans + .475 * FTA_trans),
+          dTS._trans = (dPTS_trans / 2) / (dFGA_trans + .475 * dFTA_trans),
+          RIM._trans = RIMM_trans / RIMA_trans,
+          dRIM._trans = dRIMM_trans / dRIMA_trans,
+          MID._trans = (FGM_trans - RIMM_trans - TPM_trans) / (FGA_trans - RIMA_trans - TPA_trans),
+          dMID._trans = (dFGM_trans - dRIMM_trans - dTPM_trans) / (dFGA_trans - dRIMA_trans - dTPA_trans),
+          TPrate_trans = TPA_trans / FGA_trans,
+          dTPrate_trans = dTPA_trans / dFGA_trans,
+          RIMrate_trans = RIMA_trans / FGA_trans,
+          dRIMrate_trans = dRIMA_trans / dFGA_trans,
+          MIDrate_trans = (FGA_trans - TPA_trans - RIMA_trans) / FGA_trans,
+          dMIDrate_trans = (dFGA_trans - dTPA_trans - dRIMA_trans) / dFGA_trans,
+          FTrate_trans = FTA_trans / FGA_trans,
+          dFTrate_trans = dFTA_trans / dFGA_trans,
+          ASTrate_trans = AST_trans / FGM_trans,
+          dASTrate_trans = dAST_trans / dFGM_trans,
+          TOrate_trans = TO_trans / oPOSS_trans,
+          dTOrate_trans = dTO_trans / dPOSS_trans,
+          BLKrate_trans = BLK_trans / dFGA_trans,
+          oBLKrate_trans = dBLK_trans / FGA_trans,
+          ORB._trans = ORB_trans / (ORB_trans + dDRB_trans),
+          DRB._trans = DRB_trans / (DRB_trans + dORB_trans),
+          TimePerPoss_trans = (oMins_trans / oPOSS_trans) * 60,
+          dTimePerPoss_trans = (dMins_trans / dPOSS_trans) * 60,
+          ORTG_half = PTS_half / oPOSS_half * 100,
+          DRTG_half = dPTS_half / dPOSS_half * 100,
+          NETRTG_half = ORTG_half - DRTG_half,
+          FG._half = FGM_half / FGA_half,
+          dFG._half = dFGM_half / dFGA_half,
+          TPP_half = TPM_half / TPA_half,
+          dTPP_half = dTPM_half / dTPA_half,
+          FTP_half = FTM_half / FTA_half,
+          dFTP_half = dFTM_half / dFTA_half,
+          eFG._half = (FGM_half + 0.5 * TPM_half) / FGA_half,
+          deFG._half = (dFGM_half + 0.5 * dTPM_half) / dFGA_half,
+          TS._half = (PTS_half / 2) / (FGA_half + .475 * FTA_half),
+          dTS._half = (dPTS_half / 2) / (dFGA_half + .475 * dFTA_half),
+          RIM._half = RIMM_half / RIMA_half,
+          dRIM._half = dRIMM_half / dRIMA_half,
+          MID._half = (FGM_half - RIMM_half - TPM_half) / (FGA_half - RIMA_half - TPA_half),
+          dMID._half = (dFGM_half - dRIMM_half - dTPM_half) / (dFGA_half - dRIMA_half - dTPA_half),
+          TPrate_half = TPA_half / FGA_half,
+          dTPrate_half = dTPA_half / dFGA_half,
+          RIMrate_half = RIMA_half / FGA_half,
+          dRIMrate_half = dRIMA_half / dFGA_half,
+          MIDrate_half = (FGA_half - TPA_half - RIMA_half) / FGA_half,
+          dMIDrate_half = (dFGA_half - dTPA_half - dRIMA_half) / dFGA_half,
+          FTrate_half = FTA_half / FGA_half,
+          dFTrate_half = dFTA_half / dFGA_half,
+          ASTrate_half = AST_half / FGM_half,
+          dASTrate_half = dAST_half / dFGM_half,
+          TOrate_half = TO_half / oPOSS_half,
+          dTOrate_half = dTO_half / dPOSS_half,
+          BLKrate_half = BLK_half / dFGA_half,
+          oBLKrate_half = dBLK_half / FGA_half,
+          ORB._half = ORB_half / (ORB_half + dDRB_half),
+          DRB._half = DRB_half / (DRB_half + dORB_half),
+          TimePerPoss_half = (oMins_half / oPOSS_half) * 60,
+          dTimePerPoss_half = (dMins_half / dPOSS_half) * 60
+          # HALF COURT
+        ) %>%
+        #no need to have long decimals so round everything
+        dplyr::mutate(across(where(is.numeric), ~ round(., 3)))
+    }
+
+    final[,2:ncol(final)] <- apply(final[,2:ncol(final)], 2, function(x){ifelse(is.infinite(x),0,x)})
 
     return(final)
   }
@@ -2126,9 +2579,6 @@ get_player_lineups <-
 #' @import dplyr
 get_player_stats <-
   function(play_by_play_data = NA,
-           keep.dirty = F,
-           garbage.filter = F,
-           error.thresh = 5,
            multi.games = F) {
 
     # Uses same filtering of lineups found in documentation for get lineups
@@ -2136,46 +2586,15 @@ get_player_stats <-
       message("INPUT NOT FOUND")
       return(NULL)
     }
-    if (keep.dirty == F) {
-      player_filtered <- play_by_play_data %>%
-        dplyr::filter(Sub_Deviate <= error.thresh)
-      if(nrow(player_filtered) != nrow(play_by_play_data)) {
-        message(paste0(round((nrow(play_by_play_data) - nrow(player_filtered)) /
-                               nrow(play_by_play_data), 2
-        ) * 100, "% dirty entries removed"))
-      }
-    } else{
-      player_filtered <- play_by_play_data
-    }
-    if (garbage.filter == T) {
-      total <- nrow(player_filtered)
-      player_filtered <- player_filtered %>%
-        dplyr::group_by(ID) %>%
-        dplyr::mutate(
-          Garbage_Thresh = dplyr::case_when(
-            abs(Home_Score - Away_Score) >= 25 & Game_Seconds >= 1500 ~ T,
-            abs(Home_Score - Away_Score) >= 20 &
-              Game_Seconds >= 1800  ~ T,
-            abs(Home_Score - Away_Score) >= 15 &
-              Game_Seconds >= 2160  ~ T,
-            TRUE ~ F
-          ),
-          Garbage_Time = cumsum(Garbage_Thresh) >= 1
-        ) %>%
-        dplyr::filter(Garbage_Time == F) %>%
-        dplyr::select(-Garbage_Thresh, -Garbage_Time) %>%
-        dplyr::ungroup()
-
-      if(nrow(player_filtered) != total) {
-        message(paste0(round((
-          total - nrow(player_filtered)
-        ) / total, 2) * 100, "% garbage time entries removed"))
-      }
-    }
 
     ### Individual results
     #First calculates main counting stats at a game level for each player
-    player_stats <- player_filtered %>%
+    player_stats <- play_by_play_data %>%
+      dplyr::mutate(
+        BLK_rim = (Event_Type == "Blocked Shot") * (lag(Event_Type) %in% c("Dunk", "Layup", "Hook", "Tip-In")),
+        BLK_mid = (Event_Type == "Blocked Shot") * (lag(Event_Type) == "Two Point Jumper"),
+        BLK_three = (Event_Type == "Blocked Shot") * (lag(Event_Type) == "Three Point Jumper"),
+      ) %>%
       dplyr::group_by(ID, Date, Home, Away, Event_Team, Player_1) %>%
       dplyr::summarise(
         PTS = sum((Event_Result == "made") * Shot_Value, na.rm = T),
@@ -2203,6 +2622,69 @@ get_player_stats <-
         STL = sum((Event_Type == "Steal"), na.rm = T),
         BLK = sum((Event_Type == "Blocked Shot"), na.rm = T),
         PF = sum((Event_Type == "Commits Foul"), na.rm = T),
+        # Assisted  / Unassisted
+        PTS_ast = sum((Event_Result == "made") * Shot_Value * (!is.na(Player_2)), na.rm = T),
+        FGA_ast = sum((Shot_Value %in% c(2, 3)) * (!is.na(Player_2)), na.rm = T),
+        FGM_ast = sum((Shot_Value %in% c(2, 3)) * (Event_Result == "made") * (!is.na(Player_2)), na.rm = T),
+        TPA_ast = sum((Shot_Value == 3) * (!is.na(Player_2)), na.rm = T),
+        TPM_ast = sum((Shot_Value == 3) * (Event_Result == "made") * (!is.na(Player_2)), na.rm = T),
+        RIMA_ast = sum((
+          Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+        ) * (!is.na(Player_2)), na.rm = T),
+        RIMM_ast = sum((
+          Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In") * (Event_Result == "made")
+          * (!is.na(Player_2))), na.rm = T),
+        PTS_unast = sum((Event_Result == "made") * Shot_Value * (is.na(Player_2)), na.rm = T),
+        FGA_unast = sum((Shot_Value %in% c(2, 3)) * (is.na(Player_2)), na.rm = T),
+        FGM_unast = sum((Shot_Value %in% c(2, 3)) * (Event_Result == "made") * (is.na(Player_2)), na.rm = T),
+        TPA_unast = sum((Shot_Value == 3) * (is.na(Player_2)), na.rm = T),
+        TPM_unast = sum((Shot_Value == 3) * (Event_Result == "made") * (is.na(Player_2)), na.rm = T),
+        RIMA_unast = sum((
+          Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+        ) * (is.na(Player_2)), na.rm = T),
+        RIMM_unast = sum((
+          Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In") * (Event_Result == "made")
+          * (is.na(Player_2))), na.rm = T),
+        # Transition / Halfcourt
+        PTS_trans = sum((Event_Result == "made") * Shot_Value * isTransition, na.rm = T),
+        FGA_trans = sum((Shot_Value %in% c(2, 3)) * isTransition, na.rm = T),
+        FGM_trans = sum((Shot_Value %in% c(2, 3)) * (Event_Result == "made") * isTransition, na.rm = T),
+        FTA_trans = sum((Shot_Value == 1) * isTransition, na.rm = T),
+        FTM_trans = sum((Shot_Value == 1) * (Event_Result == "made") * isTransition, na.rm = T),
+        TPA_trans = sum((Shot_Value == 3) * isTransition, na.rm = T),
+        TPM_trans = sum((Shot_Value == 3) * (Event_Result == "made") * isTransition, na.rm = T),
+        RIMA_trans = sum((
+          Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+        ) * isTransition, na.rm = T),
+        RIMM_trans = sum((
+          Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In") * (Event_Result == "made")
+          * isTransition), na.rm = T),
+        ORB_trans = sum((Event_Type == "Offensive Rebound") * isTransition, na.rm = T),
+        DRB_trans = sum((Event_Type == "Defensive Rebound") * isTransition, na.rm = T),
+        TOV_trans = sum((Event_Type == "Turnover") * isTransition, na.rm = T),
+        STL_trans = sum((Event_Type == "Steal") * isTransition, na.rm = T),
+        BLK_trans = sum((Event_Type == "Blocked Shot") * isTransition, na.rm = T),
+        PTS_half = sum((Event_Result == "made") * Shot_Value * (1-isTransition), na.rm = T),
+        FGA_half = sum((Shot_Value %in% c(2, 3)) * (1-isTransition), na.rm = T),
+        FGM_half = sum((Shot_Value %in% c(2, 3)) * (Event_Result == "made") * (1-isTransition), na.rm = T),
+        FTA_half = sum((Shot_Value == 1) * (1-isTransition), na.rm = T),
+        FTM_half = sum((Shot_Value == 1) * (Event_Result == "made") * (1-isTransition), na.rm = T),
+        TPA_half = sum((Shot_Value == 3) * (1-isTransition), na.rm = T),
+        TPM_half = sum((Shot_Value == 3) * (Event_Result == "made") * (1-isTransition), na.rm = T),
+        RIMA_half = sum((
+          Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+        ) * (1-isTransition), na.rm = T),
+        RIMM_half = sum((
+          Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In") * (Event_Result == "made")
+          * (1-isTransition)), na.rm = T),
+        ORB_half = sum((Event_Type == "Offensive Rebound") * (1-isTransition), na.rm = T),
+        DRB_half = sum((Event_Type == "Defensive Rebound") * (1-isTransition), na.rm = T),
+        TOV_half = sum((Event_Type == "Turnover") * (1-isTransition), na.rm = T),
+        STL_half = sum((Event_Type == "Steal") * (1-isTransition), na.rm = T),
+        BLK_half = sum((Event_Type == "Blocked Shot") * (1-isTransition), na.rm = T),
+        BLK_rim = sum(BLK_rim, na.rm = T),
+        BLK_mid = sum(BLK_mid, na.rm = T),
+        BLK_three = sum(BLK_three, na.rm = T),
         .groups = "drop"
       ) %>%
       dplyr::filter(Player_1 != "TEAM") %>%
@@ -2211,22 +2693,26 @@ get_player_stats <-
       dplyr::ungroup()
 
     # Can then count assists form player 2 column
-    assist_stats <- player_filtered %>%
+    assist_stats <- play_by_play_data %>%
       dplyr::group_by(ID, Player_2) %>%
-      dplyr::summarise(AST = n(), .groups = "drop") %>%
+      dplyr::summarise(
+        AST = n(),
+        AST_trans = sum((!is.na(Player_2))*isTransition),
+        AST_half = sum((!is.na(Player_2))*(1-isTransition)), .groups = "drop") %>%
       dplyr::rename(Player = Player_2) %>%
-      dplyr::ungroup()
+      dplyr::ungroup() %>%
+      dplyr::filter(!is.na(Player))
 
     # passes in pbp to calculate minutes for each player using extraneous function
-    minutes <- get_mins(player_filtered)
+    minutes <- get_mins(play_by_play_data)
 
     # merges all dataframes together by game and player
     # calculates some game level stats of use
     final_stats <-
       dplyr::left_join(player_stats, assist_stats, by = c("Player", "ID")) %>%
       dplyr::left_join(minutes, by = c("Player", "ID"))
-
     final_stats$AST[is.na(final_stats$AST)] <- 0
+
     final_stats <- final_stats %>%
       dplyr::mutate(
         FG. = FGM / FGA,
@@ -2239,21 +2725,72 @@ get_player_stats <-
         MIDM = FGM - TPM - RIMM,
         MID. = (FGM - RIMM - TPM) / (FGA - RIMA - TPA),
         PBACK. = PBACKM / PBACKA,
-        GS = PTS + 0.4 * FGM - 0.7 * FGA - 0.4 * (FTA - FTM) + 0.7 *
-          ORB + 0.3 * DRB + STL + 0.7 * AST + 0.7 * BLK - 0.4 * PF - TOV
+        # Assisted / Unassisted
+        FG._ast = FGM_ast / FGA_ast,
+        TP._ast = TPM_ast / TPA_ast,
+        eFG._ast = (FGM_ast + 0.5 * TPM_ast) / FGA_ast,
+        RIM._ast = RIMM_ast / RIMA_ast,
+        MIDA_ast = FGA_ast - TPA_ast - RIMA_ast,
+        MIDM_ast = FGM_ast - TPM_ast - RIMM_ast,
+        MID._ast = (FGM_ast - RIMM_ast - TPM_ast) / (FGA_ast - RIMA_ast - TPA_ast),
+        FG._unast = FGM_unast / FGA_unast,
+        TP._unast = TPM_unast / TPA_unast,
+        eFG._unast = (FGM_unast + 0.5 * TPM_unast) / FGA_unast,
+        RIM._unast = RIMM_unast / RIMA_unast,
+        MIDA_unast = FGA_unast - TPA_unast - RIMA_unast,
+        MIDM_unast = FGM_unast - TPM_unast - RIMM_unast,
+        MID._unast = (FGM_unast - RIMM_unast - TPM_unast) / (FGA_unast - RIMA_unast - TPA_unast),
+        # Transition / Halfcourt
+        FG._trans = FGM_trans / FGA_trans,
+        TP._trans = TPM_trans / TPA_trans,
+        FT._trans = FTM_trans / FTA_trans,
+        TS._trans = (PTS_trans / 2) / (FGA_trans + .475 * FTA_trans),
+        eFG._trans = (FGM_trans + 0.5 * TPM_trans) / FGA_trans,
+        RIM._trans = RIMM_trans / RIMA_trans,
+        MIDA_trans = FGA_trans - TPA_trans - RIMA_trans,
+        MIDM_trans = FGM_trans - TPM_trans - RIMM_trans,
+        MID._trans = (FGM_trans - RIMM_trans - TPM_trans) / (FGA_trans - RIMA_trans - TPA_trans),
+        FG._half = FGM_half / FGA_half,
+        TP._half = TPM_half / TPA_half,
+        FT._half = FTM_half / FTA_half,
+        TS._half = (PTS_half / 2) / (FGA_half + .475 * FTA_half),
+        eFG._half = (FGM_half + 0.5 * TPM_half) / FGA_half,
+        RIM._half = RIMM_half / RIMA_half,
+        MIDA_half = FGA_half - TPA_half - RIMA_half,
+        MIDM_half = FGM_half - TPM_half - RIMM_half,
+        MID._half = (FGM_half - RIMM_half - TPM_half) / (FGA_half - RIMA_half - TPA_half),
+        FG_pct_trans = FGA_trans / FGA,
+        FG_pct_ast = FGA_ast / FGA
       ) %>%
       dplyr::mutate_if(is.numeric, round, 3) %>%
       dplyr::select(
-        ID:Player, MINS, POSS, FGM, FGA, FG.,
-        TPM, TPA, TP., FTM, FTA, FT., RIMM, RIMA, RIM., MIDM, MIDA, MID.,
-        TS., eFG., PBACKM, PBACKA, PBACK., ORB, DRB, AST, STL, BLK, TOV,
-        PF, PTS, GS
+        ID:Player, MINS, POSS, PTS, ORB, DRB, AST, STL, BLK, TOV, PF, TS., eFG., FGM, FGA, FG.,
+        TPM, TPA, TP., FTM, FTA, FT., RIMM, RIMA, RIM., MIDM, MIDA, MID., PBACKM, PBACKA, PBACK.,
+        BLK_rim, BLK_mid, BLK_three,
+        # Transition
+        PTS_trans, ORB_trans, DRB_trans, AST_trans, STL_trans, BLK_trans, TOV_trans, TS._trans, eFG._trans, FGM_trans, FGA_trans, FG._trans, TPM_trans, TPA_trans, TP._trans, FTM_trans, FTA_trans, FT._trans, RIMM_trans, RIMA_trans, RIM._trans, MIDM_trans, MIDA_trans, MID._trans,
+        # Half Court
+        PTS_half, ORB_half, DRB_half, AST_half, STL_half, BLK_half, TOV_half, TS._half, eFG._half, FGM_half, FGA_half, FG._half, TPM_half, TPA_half, TP._half, FTM_half, FTA_half, FT._half, RIMM_half, RIMA_half, RIM._half, MIDM_half, MIDA_half, MID._half,
+        # Assisted
+        PTS_ast, eFG._ast, FGM_ast, FGA_ast, FG._ast, TPM_ast, TPA_ast, TP._ast, RIMM_ast, RIMA_ast, RIM._ast, MIDM_ast, MIDA_ast, MID._ast,
+        # Unassisted
+        PTS_unast, eFG._unast, FGM_unast, FGA_unast, FG._unast, TPM_unast, TPA_unast, TP._unast, RIMM_unast, RIMA_unast, RIM._unast, MIDM_unast, MIDA_unast, MID._unast
       )
-    final_stats[,7:37][is.na(final_stats[,7:37])] <- 0
+    final_stats[,7:ncol(final_stats)][is.na(final_stats[,7:ncol(final_stats)])] <- 0
 
     # User has option to aggregate game stats into player stats over all games in play by play
     # This essentially does the same processes as above but changes the grouping to exclude game specific ids
     if (multi.games == T) {
+      starters <- play_by_play_data %>%
+        dplyr::group_by(ID) %>%
+        dplyr::slice(1) %>%
+        dplyr::ungroup() %>%
+        dplyr::select(Home.1:Away.5) %>%
+        unlist() %>%
+        table() %>%
+        as.data.frame() %>%
+        dplyr::rename("Player" = ".", "GS" = "Freq")
+
       multi_game <- final_stats %>%
         dplyr::group_by(Player, Team) %>%
         dplyr::mutate(GP = n()) %>%
@@ -2266,18 +2803,61 @@ get_player_stats <-
           TS. = (PTS / 2) / (FGA + .475 * FTA),
           eFG. = (FGM + 0.5 * TPM) / FGA,
           RIM. = RIMM / RIMA,
+          MIDA = FGA - TPA - RIMA,
+          MIDM = FGM - TPM - RIMM,
           MID. = (FGM - RIMM - TPM) / (FGA - RIMA - TPA),
           PBACK. = PBACKM / PBACKA,
-          GS = PTS + 0.4 * FGM - 0.7 * FGA - 0.4 * (FTA - FTM) + 0.7 *
-            ORB + 0.3 * DRB + STL + 0.7 * AST + 0.7 * BLK - 0.4 * PF - TOV
+          # Assisted / Unassisted
+          FG._ast = FGM_ast / FGA_ast,
+          TP._ast = TPM_ast / TPA_ast,
+          eFG._ast = (FGM_ast + 0.5 * TPM_ast) / FGA_ast,
+          RIM._ast = RIMM_ast / RIMA_ast,
+          MIDA_ast = FGA_ast - TPA_ast - RIMA_ast,
+          MIDM_ast = FGM_ast - TPM_ast - RIMM_ast,
+          MID._ast = (FGM_ast - RIMM_ast - TPM_ast) / (FGA_ast - RIMA_ast - TPA_ast),
+          FG._unast = FGM_unast / FGA_unast,
+          TP._unast = TPM_unast / TPA_unast,
+          eFG._unast = (FGM_unast + 0.5 * TPM_unast) / FGA_unast,
+          RIM._unast = RIMM_unast / RIMA_unast,
+          MIDA_unast = FGA_unast - TPA_unast - RIMA_unast,
+          MIDM_unast = FGM_unast - TPM_unast - RIMM_unast,
+          MID._unast = (FGM_unast - RIMM_unast - TPM_unast) / (FGA_unast - RIMA_unast - TPA_unast),
+          # Transition / Halfcourt
+          FG._trans = FGM_trans / FGA_trans,
+          TP._trans = TPM_trans / TPA_trans,
+          FT._trans = FTM_trans / FTA_trans,
+          TS._trans = (PTS_trans / 2) / (FGA_trans + .475 * FTA_trans),
+          eFG._trans = (FGM_trans + 0.5 * TPM_trans) / FGA_trans,
+          RIM._trans = RIMM_trans / RIMA_trans,
+          MIDA_trans = FGA_trans - TPA_trans - RIMA_trans,
+          MIDM_trans = FGM_trans - TPM_trans - RIMM_trans,
+          MID._trans = (FGM_trans - RIMM_trans - TPM_trans) / (FGA_trans - RIMA_trans - TPA_trans),
+          FG._half = FGM_half / FGA_half,
+          TP._half = TPM_half / TPA_half,
+          FT._half = FTM_half / FTA_half,
+          TS._half = (PTS_half / 2) / (FGA_half + .475 * FTA_half),
+          eFG._half = (FGM_half + 0.5 * TPM_half) / FGA_half,
+          RIM._half = RIMM_half / RIMA_half,
+          MIDA_half = FGA_half - TPA_half - RIMA_half,
+          MIDM_half = FGM_half - TPM_half - RIMM_half,
+          MID._half = (FGM_half - RIMM_half - TPM_half) / (FGA_half - RIMA_half - TPA_half),
+          FG_pct_trans = FGA_trans / FGA,
+          FG_pct_ast = FGA_ast / FGA
         ) %>%
         dplyr::ungroup() %>%
         dplyr::mutate_if(is.numeric, round, 3) %>%
+        dplyr::left_join(starters, by = "Player") %>%
         dplyr::select(
-          Player, Team, GP, MINS, POSS, FGM, FGA, FG.,
-          TPM, TPA, TP., FTM, FTA, FT., RIMM, RIMA, RIM., MIDM, MIDA, MID.,
-          TS., eFG., PBACKM, PBACKA, PBACK., ORB, DRB, AST, STL, BLK, TOV,
-          PF, PTS, GS
+          Player, Team, GP, GS, MINS, POSS, PTS, ORB, DRB, AST, STL, BLK, TOV, PF, TS., eFG., FGM, FGA, FG.,
+          TPM, TPA, TP., FTM, FTA, FT., RIMM, RIMA, RIM., MIDM, MIDA, MID., PBACKM, PBACKA, PBACK., BLK_rim, BLK_mid, BLK_three,
+          # Transition
+          PTS_trans, ORB_trans, DRB_trans, AST_trans, STL_trans, BLK_trans, TOV_trans, TS._trans, eFG._trans, FGM_trans, FGA_trans, FG._trans, TPM_trans, TPA_trans, TP._trans, FTM_trans, FTA_trans, FT._trans, RIMM_trans, RIMA_trans, RIM._trans, MIDM_trans, MIDA_trans, MID._trans,
+          # Half Court
+          PTS_half, ORB_half, DRB_half, AST_half, STL_half, BLK_half, TOV_half, TS._half, eFG._half, FGM_half, FGA_half, FG._half, TPM_half, TPA_half, TP._half, FTM_half, FTA_half, FT._half, RIMM_half, RIMA_half, RIM._half, MIDM_half, MIDA_half, MID._half,
+          # Assisted
+          PTS_ast, eFG._ast, FGM_ast, FGA_ast, FG._ast, TPM_ast, TPA_ast, TP._ast, RIMM_ast, RIMA_ast, RIM._ast, MIDM_ast, MIDA_ast, MID._ast,
+          # Unassisted
+          PTS_unast, eFG._unast, FGM_unast, FGA_unast, FG._unast, TPM_unast, TPA_unast, TP._unast, RIMM_unast, RIMA_unast, RIM._unast, MIDM_unast, MIDA_unast, MID._unast
         )
 
       multi_game[is.na(multi_game)] <- 0
@@ -2342,127 +2922,41 @@ convert_events <- function(events) {
   return(events2)
 }
 
-order_seconds <- function(by_second_pbp) {
-  # Ordering the play by play to handle when enterer uses different ordering
-  # to calculate assists, needs to format as shot attempt / assist / events / subs
-  # this typically follows the true progression of events and makes it easier to follow along
-
-  # If the block of events in each team/second/score has a shot attempt and an assist
-  df1 <-
-    if (sum(
-      c(
-        "Assist",
-        "Three Point Jumper",
-        "Two Point Jumper",
-        "Layup",
-        "Hook",
-        "Dunk",
-        "Tip In"
-      ) %in% by_second_pbp$Event_Type
-    ) == 2) {
-      #finds the shot entry
-      shot <-
-        by_second_pbp[which(
-          by_second_pbp$Event_Type %in% c(
-            "Three Point Jumper",
-            "Two Point Jumper",
-            "Layup",
-            "Hook",
-            "Dunk",
-            "Tip In"
-          )
-        ),]
-      #finds the assist entry
-      assist <-
-        by_second_pbp[which(by_second_pbp$Event_Type == "Assist"),]
-      #finds all other entries
-      everything_else <-
-        by_second_pbp[which(
-          !by_second_pbp$Event_Type %in% c(
-            "Assist",
-            "Three Point Jumper",
-            "Two Point Jumper",
-            "Layup",
-            "Hook",
-            "Dunk",
-            "Tip In"
-          )
-        ),]
-      #reorderering a new dataframe to go shot/assist/everything else
-      together <- rbind(shot, assist)
-      together <- rbind(together, everything_else)
-      together
-    } else{
-      by_second_pbp
-    }
-  #now look to see if the event includes a substitution
-  df2 <-
-    if (sum(c("Leaves Game", "Enters Game") %in% df1$Event_Type) == 2 &
-        length(unique(df1$Event_Type)) > 2) {
-      #first find subs
-      subs <-
-        df1[which(df1$Event_Type %in% c("Leaves Game", "Enters Game")),]
-      #get all else
-      everything_else <-
-        df1[which(!df1$Event_Type %in% c("Leaves Game", "Enters Game")),]
-      #put it all together
-      together <- rbind(everything_else, subs)
-      together
-    } else {
-      df1
-    }
-  #return resulting ordered dataframe
-  return(df2)
-}
-get_mins <- function(player_filtered) {
+get_mins <- function(play_by_play_data) {
   #since players can appear in 10 different columns, iterate through each to calculate on court stats efficiently
   #create column names for all of the home/away matrix
   cols <- paste0(rep(c("Home", "Away"), each = 5), ".", rep(1:5, 2))
   #will store player calculatings for each column
-  player_data <- data.frame()
+  player_data <- list()
   #iterate through each player column
   for (i in 1:10) {
     #group by the given player column in iteration
     #calculate stats needed to get the players minutes and possessions on the court for
-    player <- player_filtered %>%
+    player <- play_by_play_data %>%
       dplyr::group_by_at(c(cols[i], "ID")) %>%
+      dplyr::mutate(
+        POSS_num = ifelse((Poss_Team == Home & i <= 5 | Poss_Team == Away & i > 5), as.numeric(Poss_Num), NA)
+      ) %>%
       dplyr::summarise(
         Mins = sum(Event_Length, na.rm = T) / 60,
-        FGA = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Home) *
-                    1, na.rm = T),
-        oFGA = sum((Shot_Value %in% c(2, 3)) * (Event_Team == Away) *
-                     1, na.rm = T),
-        TO = sum((Event_Type == "Turnover") * (Event_Team == Home) *
-                   1, na.rm = T),
-        oTO = sum((Event_Type == "Turnover") * (Event_Team == Away) *
-                    1, na.rm = T),
-        ORB = sum((Event_Type == "Offensive Rebound") * (Event_Team == Away) *
-                    1,
-                  na.rm = T
-        ),
-        oORB = sum((Event_Type == "Offensive Rebound") * (Event_Team == Home) *
-                     1,
-                   na.rm = T
-        ),
-        FTA = sum((Shot_Value == 1) * (Event_Team == Away) * 1, na.rm = T),
-        oFTA = sum((Shot_Value == 1) * (Event_Team == Home) * 1, na.rm = T),
+        # Get total possessions by the count of distinct possession numbers
+        POSS = dplyr::n_distinct(POSS_num, na.rm = T),
         .groups = "drop"
       ) %>%
       dplyr::ungroup() %>%
       dplyr::rename(Player =  cols[i]) %>%
-      dplyr::mutate(POSS = (FGA + .475 * FTA - ORB + TO + oFGA + .475 * oFTA - oORB + oTO) /
-               2) %>%
       dplyr::mutate_if(is.numeric, round, 3) %>%
       dplyr::ungroup()
     #once this is calculated add to the data frame of all player columns
-    player_data <- rbind(player_data, player)
+    player_data[[i]] <- player
   }
+  player_data <- dplyr::bind_rows(player_data)
   #can now group by each player name and get their total minutes and possessions
   final_df <- player_data %>%
     dplyr::group_by(Player, ID) %>%
     dplyr::summarise(MINS = sum(Mins),
-              POSS = ceiling(sum(POSS)),
-              .groups = "drop") %>%
+                     POSS = sum(POSS),
+                     .groups = "drop") %>%
     dplyr::ungroup()
 }
 binder <- dplyr::bind_rows
@@ -2616,9 +3110,9 @@ plot_duos <- function(Lineup_Data = NA, team = NA, min_mins = 0, regressed_poss 
     }
   })
 
-  r_bar_o <- (sum(lineup_data$PTS) / sum(lineup_data$ePOSS))
-  r_bar_d <- (sum(lineup_data$oPTS) / sum(lineup_data$ePOSS))
-  n_bar <- mean(lineup_data$ePOSS) + regressed_poss
+  r_bar_o <- (sum(lineup_data$PTS) / sum(lineup_data$oPOSS))
+  r_bar_d <- (sum(lineup_data$dPTS) / sum(lineup_data$dPOSS))
+  n_bar <- (mean(lineup_data$dPOSS) + mean(lineup_data$oPOSS))/2 + regressed_poss
 
   duos <- data.frame(gtools::combinations(n=length(players), r=2, v=players, repeats.allowed = F))
   colnames(duos) <- c("from","to")
@@ -2628,10 +3122,10 @@ plot_duos <- function(Lineup_Data = NA, team = NA, min_mins = 0, regressed_poss 
   for(i in 1:nrow(duos)){
     tmp <- get_player_lineups(lineup_data, Included = unlist(unname(duos[i,1:2])))
     duos$mins[i] <- sum(tmp$Mins)
-    duos$ortg[i] <- sum(tmp$PTS) / sum(tmp$ePOSS)
-    duos$drtg[i] <- sum(tmp$oPTS) / sum(tmp$ePOSS)
-    duos$adjortg[i] <- (n_bar*r_bar_o + sum(tmp$PTS)) / (n_bar + sum(tmp$ePOSS))
-    duos$adjdrtg[i] <- (n_bar*r_bar_d + sum(tmp$oPTS)) / (n_bar + sum(tmp$ePOSS))
+    duos$ortg[i] <- sum(tmp$PTS) / sum(tmp$oPOSS)
+    duos$drtg[i] <- sum(tmp$dPTS) / sum(tmp$dPOSS)
+    duos$adjortg[i] <- (n_bar*r_bar_o + sum(tmp$PTS)) / (n_bar + sum(tmp$oPOSS))
+    duos$adjdrtg[i] <- (n_bar*r_bar_d + sum(tmp$dPTS)) / (n_bar + sum(tmp$dPOSS))
   }
   duos[,1:2] <- apply(duos[,1:2],2,as.character)
   duos$netrtg <- duos$ortg - duos$drtg
@@ -2827,3 +3321,63 @@ get_box_scores <- function(game_ids, multi.games = F, use_file = F, save_file = 
 
   return(game_data)
 }
+
+#' Possession Parsing
+#'
+#' This function aggregates play by play data into individual possession results
+#' @param  play_by_play_data dataframe of play by play data from get_play_by_play
+#' @return data frame with each row representing a possession
+#' @export
+get_possessions <- function(play_by_play_data = NA) {
+  possession_df <- play_by_play_data %>%
+    dplyr::mutate(
+      End = dplyr::lag(Event_Type)
+    ) %>%
+    dplyr::group_by(ID, Date, Home, Away, Half_Status, Poss_Num, Poss_Team,
+             Home.1, Home.2, Home.3, Home.4, Home.5, Away.1, Away.2, Away.3, Away.4, Away.5) %>%
+    dplyr::summarise(
+      Home_Score = dplyr::first(Home_Score),
+      Away_Score = dplyr::first(Away_Score),
+      PTS = sum(Shot_Value * (Event_Result == "made"), na.rm = T),
+      isAssisted = sum(!is.na(Player_2) > 0),
+      isTransition = max(isTransition),
+      isGarbageTime = max(isGarbageTime),
+      startEventType = dplyr::first(End),
+      firstShotTime = dplyr::first(Poss_Length[Event_Type %in% c("Layup", "Dunk", "Tip In", "Hook", "Two Point Jumper", "Three Point Jumper")]),
+      firstShotType = dplyr::first(Event_Type[Event_Type %in% c("Layup", "Dunk", "Tip In", "Hook", "Two Point Jumper", "Three Point Jumper")]),
+      lastEventTime = dplyr::last(Poss_Length),
+      lastEventType = dplyr::last(Event_Type),
+      .groups = "drop"
+    )
+
+  missing_rows <- apply(possession_df[,which(colnames(possession_df)=="Home.1"):which(colnames(possession_df)=="Away.5")], 1, function(x){sum(is.na(x))})
+  message(paste("Forced to remove", length(which(missing_rows!=0)), "rows due to missing players in on/off"))
+
+  possession_df <- possession_df %>%
+    dplyr::filter(missing_rows==0)
+
+  # Now sorts the home and away player alphabetically so players are always in the same column for a given lineup
+  sorted_df <- apply(possession_df, 1, function(x)
+  {
+    home_players <- sort(x[which(colnames(possession_df)=="Home.1"):which(colnames(possession_df)=="Home.5")])
+    away_players <- sort(x[which(colnames(possession_df)=="Away.1"):which(colnames(possession_df)=="Away.5")])
+    return(c(x[1:(which(colnames(possession_df)=="Home.1")-1)], home_players, away_players, x[(which(colnames(possession_df)=="Away.5")+1):ncol(possession_df)]))
+  })
+
+  #Converts the sorted back into a data frame
+  sorted_df <-
+    data.frame(matrix(unlist(sorted_df), ncol = ncol(possession_df), byrow=T), stringsAsFactors = F)
+
+  colnames(sorted_df) <- colnames(possession_df)
+
+  sorted_df <- sorted_df %>%
+    mutate(across(c("ID", "Poss_Num", "Home_Score", "Away_Score", "PTS",
+                    "isAssisted", "isTransition", "isGarbageTime", "firstShotTime", "lastEventTime"), as.numeric))
+
+
+
+}
+
+
+
+
