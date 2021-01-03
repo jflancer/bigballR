@@ -86,7 +86,8 @@ scrape_game <- function(game_id) {
   format <-
     if (((first_half[1, 1] == "20:00:00") &
         (first_half[1, 2] == "game start" |
-         first_half[1, 2] == "period start")) |
+         first_half[1, 2] == "period start"|
+         first_half[1,2] == "jumpball startperiod")) |
         any(grepl("commercial",game[,2]))) {
       "V2"
     } else{
