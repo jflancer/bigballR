@@ -15,13 +15,13 @@ scrape_game(
 \arguments{
 \item{game_id}{string made up of digits given to each unique game. This can be found in the play-by-play url for each game.}
 
-\item{save_file}{Boolean. If true, save html from url to file. File path constructed from `base_path`}
+\item{save_file}{Boolean. If true, save html for game to local file. File path constructed from `base_path`}
 
-\item{use_file}{Boolean. If true, read from html file rather than url. File path constructed from `base_path`}
+\item{use_file}{Boolean. If true, retrieve from local storage rather than url. File path constructed from `base_path` directory}
 
-\item{base_path}{String. Specify base location of html file save, ex. "/Users/jake/html_files/"}
+\item{base_path}{String. Specify base directory of html file save, ex. "/Users/jake/html_files/"}
 
-\item{overwrite}{Boolean. If true, save file will overwrite an existing file at same path. Otherwise will read from existing file}
+\item{overwrite}{Boolean. If true, save file will overwrite an existing file at same path. Otherwise will read from existing file (if use_file=T)}
 }
 \value{
 data frame containing play-by-play data for a game, where each row represents an individual event from the game.

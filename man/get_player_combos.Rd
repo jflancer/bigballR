@@ -29,5 +29,5 @@ data frame with each row representing a player combination. Explanations of stat
 \description{
 Pass in lineup data and get team stats when a specified grouping of players are on the court together.
 This can work for any 1-5 player combinations. It also takes in the functions Included/Excluded, to filter
-when certain players are on the court together.
+when certain players are on the court together. Recommended to filter lineups by team before calling this function rather than after.
 }

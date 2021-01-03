@@ -4,7 +4,13 @@
 \alias{on_off_generator}
 \title{On-Off Comparison Function}
 \usage{
-on_off_generator(Players, Lineup_Data, Included = NA, Excluded = NA)
+on_off_generator(
+  Players,
+  Lineup_Data,
+  Included = NA,
+  Excluded = NA,
+  include_transition = F
+)
 }
 \arguments{
 \item{Players}{character vector of players desired to be compared with on/off}
