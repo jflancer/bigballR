@@ -448,8 +448,18 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     message("Warning: Possession Parsing Has Errors")
   }
 
+  # Detect games with invalid substitutions - rather than parsing clearly flawed data, return with no subs
+  player_subs <- dirty_game %>%
+    filter(Event_Type %in% c("Enters Game", "Exits Game")) %>%
+    .$Player_1
+
+  # 1. If a number is used for a substitution
+  # 2. If TEAM is used
+  # 3. If a team name is used
+  invalid_sub <- any(grepl(paste0("\\.[0-9]+|\\.TEAM|",toupper(home_team),"|", toupper(away_team)), player_subs))
+
   # Now Check to See if Players Were Recorded in the Game
-  if (length(unique(dirty_game$Player_1)) == 1) {
+  if (length(unique(dirty_game$Player_1)) == 1 | invalid_sub) {
 
     # No Player Cleaning
     # Found no player names in data
@@ -461,9 +471,9 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         Status = "NO_PLAYER", #set status variable mentioned earlier
         Sub_Deviate = nrow(.)
       ) %>%
-      bind_cols(as.data.frame(matrix(rep(NA, nrow(mild_game)*10),
+      bind_cols(as.data.frame(matrix(rep(NA, nrow(dirty_game)*10),
                        ncol = 10,
-                       nrow = nrow(mild_game))) %>%
+                       nrow = nrow(dirty_game))) %>%
                   rename(Home.1 = V1, Home.2 = V2, Home.3 = V3, Home.4 = V4, Home.5 = V5,
                          Away.1 = V6, Away.2 = V7, Away.3 = V8, Away.4 = V9, Away.5 = V10
                          )) %>%
@@ -514,13 +524,13 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     # Report substitition mistake messages to users
     # Possibly find a way to deal with this but for now just reporting
     if (nrow(mins_errors) > 0) {
-      message(
-        paste(
-          "Potential Substitution Entry Mistakes within: Half",
-          # FIX THIS TO JUST SHOW HALF NOT SPECIFIC TIME
-          paste(unique(mins_errors$Game_Seconds %/% 1200)+1, collapse = ", ")
-        )
-      )
+      # message(
+      #   paste(
+      #     "Potential Substitution Entry Mistakes within: Half",
+      #     # FIX THIS TO JUST SHOW HALF NOT SPECIFIC TIME
+      #     paste(unique(mins_errors$Game_Seconds %/% 1200)+1, collapse = ", ")
+      #   )
+      # )
       # Changes the status variable to note a sub mistake was made
       status <- "SUB_MISTAKE"
     }
@@ -656,14 +666,14 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         # If these methods find more than five starters, just chooses the first five found until a better way is suggested
         # Warn user that this is being used
         if (length(all_starters) > 5) {
-          message(
-            paste(
-              "Using approximate starter finder, choosing:\n",
-              paste(all_starters[1:5], collapse = ", "),
-              "\nfrom: ",
-              paste(all_starters, collapse = ", ")
-            )
-          )
+          # message(
+          #   paste(
+          #     "Using approximate starter finder, choosing:\n",
+          #     paste(all_starters[1:5], collapse = ", "),
+          #     "\nfrom: ",
+          #     paste(all_starters, collapse = ", ")
+          #   )
+          # )
           all_starters[1:5]
         # If 5, checks have successfully found 5 starters
         } else if(length(all_starters) == 5){
@@ -786,14 +796,14 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         # all_starters <- all_starters[which(!all_starters %in% away_bench)]
 
         if (length(all_starters) > 5) {
-          message(
-            paste(
-              "Using approximate starter finder, choosing:\n",
-              paste(all_starters[1:5], collapse = ", "),
-              "\nfrom: ",
-              paste(all_starters, collapse = ", ")
-            )
-          )
+          # message(
+          #   paste(
+          #     "Using approximate starter finder, choosing:\n",
+          #     paste(all_starters[1:5], collapse = ", "),
+          #     "\nfrom: ",
+          #     paste(all_starters, collapse = ", ")
+          #   )
+          # )
           all_starters[1:5]
         } else if(length(all_starters) == 5){
           all_starters
@@ -1042,11 +1052,11 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     # Provide a column for deviations, allowing user to filter pbp with too many errors
     clean_game$Sub_Deviate <- nrow(entry_mistakes)
     # Warns user of number of entry mistakes found - only report if significant
-    if (nrow(entry_mistakes) > 10) {
-      message(paste(nrow(entry_mistakes), "on court player discrepancies"))
-    }
+
+    warn <- ifelse(nrow(entry_mistakes)>15, paste(nrow(entry_mistakes), "deviations"), "")
+    source <- ifelse(isUrlRead, "web", "local")
     # Give user final message about the status of the game they've scraped
-    message(paste(date, home_team, "v", away_team, "| ", format, "|", game_id))
+    message(paste(date, home_team, "v", away_team, "| ", format, "|", game_id, "|", source, "|", warn))
     # Sys.sleep so the ncaa server isn't overworked
     if(isUrlRead) {
       Sys.sleep(2)
