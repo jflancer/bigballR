@@ -213,7 +213,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     players <- gsub("[^[:alnum:] ]", "", players)
     player_name <- gsub("\\s+", ".", toupper(players))
     # Remove any notation of JR/SR/II/III from player name
-    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV","", player_name)
+    player_name <- gsub("(\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV)$","", player_name)
     player_name <- trimws(player_name)
 
     # Now getting events from left of comma
@@ -256,9 +256,9 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     last <- gsub("[^[:alnum:] ]", "", last)
 
     player_name <- paste0(first, ".", last)
-    player_name <- ifelse(substr(player_name, 1, 1) == ".", "TEAM", player_name)
+    player_name <- ifelse(substr(player_name, 1, 2) == ".T", "TEAM", player_name)
     player_name <- gsub("\\s+", ".", player_name)
-    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV","", player_name)
+    player_name <- gsub("(\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV)$","", player_name)
   }
 
   # Now format controls for version
@@ -541,7 +541,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         dplyr::filter(half_data,
                       Event_Team == Home,
                       Event_Type == "Leaves Game",
-                      Player_1 != "TEAM",
+                      # Player_1 != "TEAM",
                       Time != "00:00",
                       (Time != "20:00" & Half_Status %in% 1:2) | (Time != "05:00" & Half_Status >2)
                       )$Player_1
@@ -549,7 +549,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         dplyr::filter(half_data,
                       Event_Team == Home,
                       Event_Type == "Enters Game",
-                      Player_1 != "TEAM",
+                      # Player_1 != "TEAM",
                       Time != "00:00",
                       (Time != "20:00" & Half_Status %in% 1:2) | (Time != "05:00" & Half_Status >2)
                       )$Player_1
@@ -557,7 +557,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         dplyr::filter(half_data,
                       Event_Team == Away,
                       Event_Type == "Leaves Game",
-                      Player_1 != "TEAM",
+                      # Player_1 != "TEAM",
                       Time != "00:00",
                       (Time != "20:00" & Half_Status %in% 1:2) | (Time != "05:00" & Half_Status >2)
                       )$Player_1
@@ -565,7 +565,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         dplyr::filter(half_data,
                       Event_Team == Away,
                       Event_Type == "Enters Game",
-                      Player_1 != "TEAM",
+                      # Player_1 != "TEAM",
                       (Time != "20:00" & Half_Status %in% 1:2) | (Time != "05:00" & Half_Status >2)
                       )$Player_1
 
@@ -926,6 +926,10 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
           home_mat[k + 1, ] <- home_mat[k,]
           away_mat[k + 1, ] <- away_mat[k,]
         }
+        home_enter_players <- home_enter_players[!is.na(home_enter_players)]
+        home_exit_players <- home_exit_players[!is.na(home_exit_players)]
+        away_enter_players <- away_enter_players[!is.na(away_enter_players)]
+        away_exit_players <- away_exit_players[!is.na(away_exit_players)]
       }
       #This adds the matrix for each half to the game matrix
       home_player_matrix <-
@@ -956,7 +960,6 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     #Add the event length variable which can often be helpful
     home_starters <- unlist(mild_game[1,23:27])
     away_starters <- unlist(mild_game[1,28:32])
-
 
     #Can now put together final data frame
     clean_game <- mild_game %>%
@@ -1626,10 +1629,10 @@ get_team_roster <-
       mutate(across(everything(), as.character))
     # Return the more usable roster page
     player <- table$Player
-    clean_name <- sapply(strsplit(table$Player, ","), function(x){trimws(paste(x[length(x)],x[1]))})
+    clean_name <- sapply(strsplit(player, ","), function(x){trimws(paste(x[length(x)],x[1]))})
     format <- gsub("[^[:alnum:] ]", "", clean_name)
     format <- toupper(gsub("\\s+",".", format))
-    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV","", format)
+    player_name <- gsub("(\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV)$","", format)
     player_name <- trimws(player_name)
 
     table$Player <- player_name
@@ -3252,10 +3255,10 @@ scrape_box <-
     clean_name <- sapply(strsplit(box$Player, ","), function(x){trimws(paste(x[length(x)],x[1]))})
     format <- gsub("[^[:alnum:] ]", "", clean_name)
     format <- toupper(gsub("\\s+",".", format))
-    player_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV","", format)
+    player_name <- gsub("(\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV)$","", format)
     player_name <- trimws(player_name)
 
-    clean_name <- gsub("\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV","", clean_name, ignore.case = T)
+    clean_name <- gsub("(\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV)$","", clean_name, ignore.case = T)
     clean_name <- trimws(clean_name)
 
     box$CleanName <- clean_name
