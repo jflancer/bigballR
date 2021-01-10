@@ -448,7 +448,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     message("Warning: Possession Parsing Has Errors")
   }
 
-  # Detect games with invalid substitutions - rather than parsing clearly flawed data, return with no subs
+  # Detect games with invalid substitutions - rather than parsing clearly flawed data, return with no sub format
   player_subs <- dirty_game %>%
     filter(Event_Type %in% c("Enters Game", "Exits Game")) %>%
     .$Player_1
@@ -459,7 +459,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
   invalid_sub <- any(grepl(paste0("\\.[0-9]+|\\.TEAM|",toupper(home_team),"|", toupper(away_team)), player_subs))
 
   # Now Check to See if Players Were Recorded in the Game
-  if (length(unique(dirty_game$Player_1)) == 1 | invalid_sub) {
+  if (length(unique(dirty_game$Player_1)) == 1 | invalid_sub | length(player_subs) == 0) {
 
     # No Player Cleaning
     # Found no player names in data
