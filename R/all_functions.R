@@ -3369,27 +3369,38 @@ get_box_scores <- function(game_ids, multi.games = F, use_file = F, save_file = 
 #' @param  play_by_play_data dataframe of play by play data from get_play_by_play
 #' @return data frame with each row representing a possession
 #' @export
-get_possessions <- function(play_by_play_data = NA) {
-  possession_df <- play_by_play_data %>%
-    dplyr::mutate(
-      End = dplyr::lag(Event_Type)
-    ) %>%
-    dplyr::group_by(ID, Date, Home, Away, Half_Status, Poss_Num, Poss_Team,
-             Home.1, Home.2, Home.3, Home.4, Home.5, Away.1, Away.2, Away.3, Away.4, Away.5) %>%
-    dplyr::summarise(
-      Home_Score = dplyr::first(Home_Score),
-      Away_Score = dplyr::first(Away_Score),
-      PTS = sum(Shot_Value * (Event_Result == "made"), na.rm = T),
-      isAssisted = sum(!is.na(Player_2) > 0),
-      isTransition = max(isTransition),
-      isGarbageTime = max(isGarbageTime),
-      startEventType = dplyr::first(End),
-      firstShotTime = dplyr::first(Poss_Length[Event_Type %in% c("Layup", "Dunk", "Tip In", "Hook", "Two Point Jumper", "Three Point Jumper")]),
-      firstShotType = dplyr::first(Event_Type[Event_Type %in% c("Layup", "Dunk", "Tip In", "Hook", "Two Point Jumper", "Three Point Jumper")]),
-      lastEventTime = dplyr::last(Poss_Length),
-      lastEventType = dplyr::last(Event_Type),
-      .groups = "drop"
-    )
+get_possessions <- function(play_by_play_data = NA, simple = F) {
+  if(simple) {
+    possession_df <- play_by_play_data %>%
+      dplyr::group_by(ID, Date, Home, Away, Poss_Num, Poss_Team,
+                      Home.1, Home.2, Home.3, Home.4, Home.5, Away.1, Away.2, Away.3, Away.4, Away.5) %>%
+      dplyr::summarise(
+        PTS = sum(Shot_Value * (Event_Result == "made"), na.rm = T),
+        .groups = "drop"
+      )
+  } else {
+    possession_df <- play_by_play_data %>%
+      dplyr::mutate(
+        End = dplyr::lag(Event_Type)
+      ) %>%
+      dplyr::group_by(ID, Date, Home, Away, Half_Status, Poss_Num, Poss_Team,
+                      Home.1, Home.2, Home.3, Home.4, Home.5, Away.1, Away.2, Away.3, Away.4, Away.5) %>%
+      dplyr::summarise(
+        Home_Score = dplyr::first(Home_Score),
+        Away_Score = dplyr::first(Away_Score),
+        PTS = sum(Shot_Value * (Event_Result == "made"), na.rm = T),
+        isAssisted = sum(!is.na(Player_2) > 0),
+        isTransition = max(isTransition),
+        isGarbageTime = max(isGarbageTime),
+        startEventType = dplyr::first(End),
+        firstShotTime = dplyr::first(Poss_Length[Event_Type %in% c("Layup", "Dunk", "Tip In", "Hook", "Two Point Jumper", "Three Point Jumper")]),
+        firstShotType = dplyr::first(Event_Type[Event_Type %in% c("Layup", "Dunk", "Tip In", "Hook", "Two Point Jumper", "Three Point Jumper")]),
+        lastEventTime = dplyr::last(Poss_Length),
+        lastEventType = dplyr::last(Event_Type),
+        .groups = "drop"
+      )
+  }
+  
 
   missing_rows <- apply(possession_df[,which(colnames(possession_df)=="Home.1"):which(colnames(possession_df)=="Away.5")], 1, function(x){sum(is.na(x))})
   message(paste("Forced to remove", length(which(missing_rows!=0)), "rows due to missing players in on/off"))
@@ -3398,25 +3409,23 @@ get_possessions <- function(play_by_play_data = NA) {
     dplyr::filter(missing_rows==0)
 
   # Now sorts the home and away player alphabetically so players are always in the same column for a given lineup
-  sorted_df <- apply(possession_df, 1, function(x)
-  {
-    home_players <- sort(x[which(colnames(possession_df)=="Home.1"):which(colnames(possession_df)=="Home.5")])
-    away_players <- sort(x[which(colnames(possession_df)=="Away.1"):which(colnames(possession_df)=="Away.5")])
-    return(c(x[1:(which(colnames(possession_df)=="Home.1")-1)], home_players, away_players, x[(which(colnames(possession_df)=="Away.5")+1):ncol(possession_df)]))
-  })
-
-  #Converts the sorted back into a data frame
-  sorted_df <-
-    data.frame(matrix(unlist(sorted_df), ncol = ncol(possession_df), byrow=T), stringsAsFactors = F)
-
-  colnames(sorted_df) <- colnames(possession_df)
-
-  sorted_df <- sorted_df %>%
-    mutate(across(c("ID", "Poss_Num", "Home_Score", "Away_Score", "PTS",
-                    "isAssisted", "isTransition", "isGarbageTime", "firstShotTime", "lastEventTime"), as.numeric))
-  return(sorted_df)
+  if(!simple) {
+    sorted_df <- apply(possession_df, 1, function(x)
+    {
+      home_players <- sort(x[which(colnames(possession_df)=="Home.1"):which(colnames(possession_df)=="Home.5")])
+      away_players <- sort(x[which(colnames(possession_df)=="Away.1"):which(colnames(possession_df)=="Away.5")])
+      return(c(x[1:(which(colnames(possession_df)=="Home.1")-1)], home_players, away_players, x[(which(colnames(possession_df)=="Away.5")+1):ncol(possession_df)]))
+    })
+    #Converts the sorted back into a data frame
+    sorted_df <-
+      data.frame(matrix(unlist(sorted_df), ncol = ncol(possession_df), byrow=T), stringsAsFactors = F)
+    
+    colnames(sorted_df) <- colnames(possession_df)
+    sorted_df <- sorted_df %>%
+      mutate(across(c("ID", "Poss_Num", "Home_Score", "Away_Score", "PTS",
+                      "isAssisted", "isTransition", "isGarbageTime", "firstShotTime", "lastEventTime"), as.numeric))
+    return(sorted_df)
+  } else {
+    return(possession_df)
+  }
 }
-
-
-
-
