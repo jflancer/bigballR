@@ -2604,15 +2604,43 @@ get_player_lineups <-
 #' \item{PBACK} - Successful putback: A rim attempt made preceded by an offensive rebound from the same player
 #' @export
 #' @import dplyr
-get_player_stats <- function(play_by_play_data = NA, multi.games = F) {
-    # Uses same filtering of lineups found in documentation for get lineups
-    if (length(play_by_play_data) == 0) {
-      message("INPUT NOT FOUND")
-      return(NULL)
-    }
-
-    ### Individual results
-    #First calculates main counting stats at a game level for each player
+get_player_stats <- function(play_by_play_data = NA, multi.games = F, simple = F) {
+  if (length(play_by_play_data) == 0) {
+    message("INPUT NOT FOUND")
+    return(NULL)
+  }
+  ### Individual results
+  # First calculates main counting stats at a game level for each player
+  if(simple) {
+    player_stats <- play_by_play_data %>%
+      dplyr::group_by(ID, Date, Home, Away, Event_Team, Player_1) %>%
+      dplyr::summarise(
+        PTS = sum((Event_Result == "made") * Shot_Value, na.rm = T),
+        FGA = sum((Shot_Value %in% c(2, 3)), na.rm = T),
+        FGM = sum((Shot_Value %in% c(2, 3)) * (Event_Result == "made"), na.rm = T),
+        TPA = sum((Shot_Value == 3), na.rm = T),
+        TPM = sum((Shot_Value == 3) * (Event_Result == "made"), na.rm = T),
+        RIMA = sum((
+          Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In")
+        ), na.rm = T),
+        RIMM = sum((
+          Event_Type %in% c("Dunk", "Layup", "Hook", "Tip-In") * (Event_Result == "made")
+        ), na.rm = T),
+        FTA = sum((Shot_Value == 1), na.rm = T),
+        FTM = sum((Shot_Value == 1) * (Event_Result == "made"), na.rm = T),
+        ORB = sum((Event_Type == "Offensive Rebound"), na.rm = T),
+        DRB = sum((Event_Type == "Defensive Rebound"), na.rm = T),
+        TOV = sum((Event_Type == "Turnover"), na.rm = T),
+        STL = sum((Event_Type == "Steal"), na.rm = T),
+        BLK = sum((Event_Type == "Blocked Shot"), na.rm = T),
+        PF = sum((Event_Type == "Commits Foul"), na.rm = T),
+        .groups = 'drop'
+      ) %>%
+      dplyr::filter(Player_1 != "TEAM") %>%
+      dplyr::rename(Player = Player_1,
+                    Team = Event_Team) %>%
+      dplyr::ungroup()
+  } else {
     player_stats <- play_by_play_data %>%
       dplyr::mutate(
         BLK_rim = (Event_Type == "Blocked Shot") * (lag(Event_Type) %in% c("Dunk", "Layup", "Hook", "Tip-In")),
@@ -2710,8 +2738,17 @@ get_player_stats <- function(play_by_play_data = NA, multi.games = F) {
       dplyr::rename(Player = Player_1,
              Team = Event_Team) %>%
       dplyr::ungroup()
+  }
 
     # Can then count assists form player 2 column
+  if(simple) {
+    assist_stats <- play_by_play_data %>%
+      dplyr::group_by(ID, Player_2) %>%
+      dplyr::summarise(AST = n()) %>%
+      dplyr::rename(Player = Player_2) %>%
+      dplyr::ungroup() %>%
+      dplyr::filter(!is.na(Player))
+  } else {
     assist_stats <- play_by_play_data %>%
       dplyr::group_by(ID, Player_2) %>%
       dplyr::summarise(
@@ -2721,7 +2758,7 @@ get_player_stats <- function(play_by_play_data = NA, multi.games = F) {
       dplyr::rename(Player = Player_2) %>%
       dplyr::ungroup() %>%
       dplyr::filter(!is.na(Player))
-
+  }
     # passes in pbp to calculate minutes for each player using extraneous function
     minutes <- get_mins(play_by_play_data)
 
@@ -2732,91 +2769,25 @@ get_player_stats <- function(play_by_play_data = NA, multi.games = F) {
       dplyr::left_join(minutes, by = c("Player", "ID"))
     final_stats$AST[is.na(final_stats$AST)] <- 0
 
-    final_stats <- final_stats %>%
-      dplyr::mutate(
-        FG. = FGM / FGA,
-        TP. = TPM / TPA,
-        FT. = FTM / FTA,
-        TS. = (PTS / 2) / (FGA + .475 * FTA),
-        eFG. = (FGM + 0.5 * TPM) / FGA,
-        RIM. = RIMM / RIMA,
-        MIDA = FGA - TPA - RIMA,
-        MIDM = FGM - TPM - RIMM,
-        MID. = (FGM - RIMM - TPM) / (FGA - RIMA - TPA),
-        PBACK. = PBACKM / PBACKA,
-        # Assisted / Unassisted
-        MIDM_ast = FGM_ast - TPM_ast - RIMM_ast,
-        FG._unast = FGM_unast / FGA_unast,
-        TP._unast = TPM_unast / TPA_unast,
-        eFG._unast = (FGM_unast + 0.5 * TPM_unast) / FGA_unast,
-        RIM._unast = RIMM_unast / RIMA_unast,
-        MIDA_unast = FGA_unast - TPA_unast - RIMA_unast,
-        MIDM_unast = FGM_unast - TPM_unast - RIMM_unast,
-        MID._unast = (FGM_unast - RIMM_unast - TPM_unast) / (FGA_unast - RIMA_unast - TPA_unast),
-        # Transition / Halfcourt
-        FG._trans = FGM_trans / FGA_trans,
-        TP._trans = TPM_trans / TPA_trans,
-        FT._trans = FTM_trans / FTA_trans,
-        TS._trans = (PTS_trans / 2) / (FGA_trans + .475 * FTA_trans),
-        eFG._trans = (FGM_trans + 0.5 * TPM_trans) / FGA_trans,
-        RIM._trans = RIMM_trans / RIMA_trans,
-        MIDA_trans = FGA_trans - TPA_trans - RIMA_trans,
-        MIDM_trans = FGM_trans - TPM_trans - RIMM_trans,
-        MID._trans = (FGM_trans - RIMM_trans - TPM_trans) / (FGA_trans - RIMA_trans - TPA_trans),
-        FG._half = FGM_half / FGA_half,
-        TP._half = TPM_half / TPA_half,
-        FT._half = FTM_half / FTA_half,
-        TS._half = (PTS_half / 2) / (FGA_half + .475 * FTA_half),
-        eFG._half = (FGM_half + 0.5 * TPM_half) / FGA_half,
-        RIM._half = RIMM_half / RIMA_half,
-        MIDA_half = FGA_half - TPA_half - RIMA_half,
-        MIDM_half = FGM_half - TPM_half - RIMM_half,
-        MID._half = (FGM_half - RIMM_half - TPM_half) / (FGA_half - RIMA_half - TPA_half),
-        pct_FGA_trans = FGA_trans / FGA,
-        pct_TPA_trans = TPA_trans / FGA,
-        pct_RIMA_trans = RIMA_trans / FGA,
-        pct_FGM_trans = FGM_trans / FGM,
-        pct_TPM_trans = TPM_trans / FGM,
-        pct_RIMM_trans = RIMM_trans / FGM,
-        pct_FGM_ast = FGM_ast / FGM,
-        pct_TPM_ast = TPM_ast / TPM,
-        pct_RIMM_ast = RIMM_ast / RIMM
-      ) %>%
-      dplyr::mutate_if(is.numeric, round, 3) %>%
-      dplyr::select(
-        ID:Player, MINS, oPOSS, PTS, ORB, DRB, AST, STL, BLK, TOV, PF, TS., eFG., FGM, FGA, FG.,
-        TPM, TPA, TP., FTM, FTA, FT., RIMM, RIMA, RIM., MIDM, MIDA, MID., PBACKM, PBACKA, PBACK.,
-        BLK_rim, BLK_mid, BLK_three,
-        pct_FGA_trans:pct_RIMM_ast,
-        # Transition
-        PTS_trans, ORB_trans, DRB_trans, AST_trans, STL_trans, BLK_trans, TOV_trans, TS._trans, eFG._trans, FGM_trans, FGA_trans, FG._trans, TPM_trans, TPA_trans, TP._trans, FTM_trans, FTA_trans, FT._trans, RIMM_trans, RIMA_trans, RIM._trans, MIDM_trans, MIDA_trans, MID._trans,
-        # Half Court
-        PTS_half, ORB_half, DRB_half, AST_half, STL_half, BLK_half, TOV_half, TS._half, eFG._half, FGM_half, FGA_half, FG._half, TPM_half, TPA_half, TP._half, FTM_half, FTA_half, FT._half, RIMM_half, RIMA_half, RIM._half, MIDM_half, MIDA_half, MID._half,
-        # Assisted
-        PTS_ast, FGM_ast, TPM_ast, RIMM_ast, MIDM_ast,
-        # Unassisted
-        PTS_unast, eFG._unast, FGM_unast, FGA_unast, FG._unast, TPM_unast, TPA_unast, TP._unast, RIMM_unast, RIMA_unast, RIM._unast, MIDM_unast, MIDA_unast, MID._unast
-      )
-    final_stats[,7:ncol(final_stats)][is.na(final_stats[,7:ncol(final_stats)])] <- 0
-
-    # User has option to aggregate game stats into player stats over all games in play by play
-    # This essentially does the same processes as above but changes the grouping to exclude game specific ids
-    if (multi.games == T) {
-      starters <- play_by_play_data %>%
-        dplyr::group_by(ID) %>%
-        dplyr::slice(1) %>%
-        dplyr::ungroup() %>%
-        dplyr::select(Home.1:Away.5) %>%
-        unlist() %>%
-        table() %>%
-        as.data.frame() %>%
-        dplyr::rename("Player" = ".", "GS" = "Freq")
-
-      multi_game <- final_stats %>%
-        dplyr::group_by(Player, Team) %>%
-        dplyr::mutate(GP = n()) %>%
-        dplyr::group_by(Player, Team, GP) %>%
-        dplyr::summarise_if(is.numeric, sum) %>%
+    if(simple) {
+      final_stats <- final_stats %>%
+        dplyr::mutate(
+          FG. = FGM / FGA,
+          TP. = TPM / TPA,
+          FT. = FTM / FTA,
+          TS. = (PTS / 2) / (FGA + .475 * FTA),
+          eFG. = (FGM + 0.5 * TPM) / FGA,
+          RIM. = RIMM / RIMA,
+          MIDA = FGA - TPA - RIMA,
+          MIDM = FGM - TPM - RIMM,
+          MID. = (FGM - RIMM - TPM) / (FGA - RIMA - TPA)) %>%
+        dplyr::mutate_if(is.numeric, round, 3) %>%
+        dplyr::select(
+          ID:Player, MINS, oPOSS, PTS, ORB, DRB, AST, STL, BLK, TOV, PF, TS., eFG., FGM, FGA, FG.,
+          TPM, TPA, TP., FTM, FTA, FT., RIMM, RIMA, RIM., MIDM, MIDA, MID.)
+      final_stats[,7:ncol(final_stats)][is.na(final_stats[,7:ncol(final_stats)])] <- 0
+    } else {
+      final_stats <- final_stats %>%
         dplyr::mutate(
           FG. = FGM / FGA,
           TP. = TPM / TPA,
@@ -2829,6 +2800,7 @@ get_player_stats <- function(play_by_play_data = NA, multi.games = F) {
           MID. = (FGM - RIMM - TPM) / (FGA - RIMA - TPA),
           PBACK. = PBACKM / PBACKA,
           # Assisted / Unassisted
+          MIDM_ast = FGM_ast - TPM_ast - RIMM_ast,
           FG._unast = FGM_unast / FGA_unast,
           TP._unast = TPM_unast / TPA_unast,
           eFG._unast = (FGM_unast + 0.5 * TPM_unast) / FGA_unast,
@@ -2865,14 +2837,12 @@ get_player_stats <- function(play_by_play_data = NA, multi.games = F) {
           pct_TPM_ast = TPM_ast / TPM,
           pct_RIMM_ast = RIMM_ast / RIMM
         ) %>%
-        dplyr::ungroup() %>%
         dplyr::mutate_if(is.numeric, round, 3) %>%
-        dplyr::left_join(starters, by = "Player") %>%
         dplyr::select(
-          Player, Team, GP, GS, MINS, oPOSS, PTS, ORB, DRB, AST, STL, BLK, TOV, PF, TS., eFG., FGM, FGA, FG.,
-          TPM, TPA, TP., FTM, FTA, FT., RIMM, RIMA, RIM., MIDM, MIDA, MID., PBACKM, PBACKA, PBACK., BLK_rim, BLK_mid, BLK_three,
-          pct_FGA_trans, pct_TPA_trans, pct_RIMA_trans, pct_FGM_trans, pct_TPM_trans, pct_RIMM_trans,
-          pct_FGM_ast, pct_TPM_ast, pct_RIMM_ast,
+          ID:Player, MINS, oPOSS, PTS, ORB, DRB, AST, STL, BLK, TOV, PF, TS., eFG., FGM, FGA, FG.,
+          TPM, TPA, TP., FTM, FTA, FT., RIMM, RIMA, RIM., MIDM, MIDA, MID., PBACKM, PBACKA, PBACK.,
+          BLK_rim, BLK_mid, BLK_three,
+          pct_FGA_trans:pct_RIMM_ast,
           # Transition
           PTS_trans, ORB_trans, DRB_trans, AST_trans, STL_trans, BLK_trans, TOV_trans, TS._trans, eFG._trans, FGM_trans, FGA_trans, FG._trans, TPM_trans, TPA_trans, TP._trans, FTM_trans, FTA_trans, FT._trans, RIMM_trans, RIMA_trans, RIM._trans, MIDM_trans, MIDA_trans, MID._trans,
           # Half Court
@@ -2882,10 +2852,118 @@ get_player_stats <- function(play_by_play_data = NA, multi.games = F) {
           # Unassisted
           PTS_unast, eFG._unast, FGM_unast, FGA_unast, FG._unast, TPM_unast, TPA_unast, TP._unast, RIMM_unast, RIMA_unast, RIM._unast, MIDM_unast, MIDA_unast, MID._unast
         )
+      final_stats[,7:ncol(final_stats)][is.na(final_stats[,7:ncol(final_stats)])] <- 0
+    }
+    # User has option to aggregate game stats into player stats over all games in play by play
+    # This essentially does the same processes as above but changes the grouping to exclude game specific ids
+    if (multi.games == T) {
+      starters <- play_by_play_data %>%
+        dplyr::group_by(ID) %>%
+        dplyr::slice(1) %>%
+        dplyr::ungroup() %>%
+        dplyr::select(Home.1:Away.5) %>%
+        unlist() %>%
+        table() %>%
+        as.data.frame() %>%
+        dplyr::rename("Player" = ".", "GS" = "Freq")
 
+      if(simple) {
+        multi_game <- final_stats %>%
+          dplyr::group_by(Player, Team) %>%
+          dplyr::mutate(GP = n()) %>%
+          dplyr::group_by(Player, Team, GP) %>%
+          dplyr::summarise_if(is.numeric, sum) %>%
+          dplyr::mutate(
+            FG. = FGM / FGA,
+            TP. = TPM / TPA,
+            FT. = FTM / FTA,
+            TS. = (PTS / 2) / (FGA + .475 * FTA),
+            eFG. = (FGM + 0.5 * TPM) / FGA,
+            RIM. = RIMM / RIMA,
+            MIDA = FGA - TPA - RIMA,
+            MIDM = FGM - TPM - RIMM,
+            MID. = (FGM - RIMM - TPM) / (FGA - RIMA - TPA)) %>%
+          dplyr::ungroup() %>%
+          dplyr::mutate_if(is.numeric, round, 3) %>%
+          dplyr::left_join(starters, by = "Player") %>%
+          dplyr::select(
+            Player, Team, GP, GS, MINS, oPOSS, PTS, ORB, DRB, AST, STL, BLK, TOV, PF, TS., eFG., FGM, FGA, FG.,
+            TPM, TPA, TP., FTM, FTA, FT., RIMM, RIMA, RIM., MIDM, MIDA, MID.)
+      } else {
+        multi_game <- final_stats %>%
+          dplyr::group_by(Player, Team) %>%
+          dplyr::mutate(GP = n()) %>%
+          dplyr::group_by(Player, Team, GP) %>%
+          dplyr::summarise_if(is.numeric, sum) %>%
+          dplyr::mutate(
+            FG. = FGM / FGA,
+            TP. = TPM / TPA,
+            FT. = FTM / FTA,
+            TS. = (PTS / 2) / (FGA + .475 * FTA),
+            eFG. = (FGM + 0.5 * TPM) / FGA,
+            RIM. = RIMM / RIMA,
+            MIDA = FGA - TPA - RIMA,
+            MIDM = FGM - TPM - RIMM,
+            MID. = (FGM - RIMM - TPM) / (FGA - RIMA - TPA),
+            PBACK. = PBACKM / PBACKA,
+            # Assisted / Unassisted
+            FG._unast = FGM_unast / FGA_unast,
+            TP._unast = TPM_unast / TPA_unast,
+            eFG._unast = (FGM_unast + 0.5 * TPM_unast) / FGA_unast,
+            RIM._unast = RIMM_unast / RIMA_unast,
+            MIDA_unast = FGA_unast - TPA_unast - RIMA_unast,
+            MIDM_unast = FGM_unast - TPM_unast - RIMM_unast,
+            MID._unast = (FGM_unast - RIMM_unast - TPM_unast) / (FGA_unast - RIMA_unast - TPA_unast),
+            # Transition / Halfcourt
+            FG._trans = FGM_trans / FGA_trans,
+            TP._trans = TPM_trans / TPA_trans,
+            FT._trans = FTM_trans / FTA_trans,
+            TS._trans = (PTS_trans / 2) / (FGA_trans + .475 * FTA_trans),
+            eFG._trans = (FGM_trans + 0.5 * TPM_trans) / FGA_trans,
+            RIM._trans = RIMM_trans / RIMA_trans,
+            MIDA_trans = FGA_trans - TPA_trans - RIMA_trans,
+            MIDM_trans = FGM_trans - TPM_trans - RIMM_trans,
+            MID._trans = (FGM_trans - RIMM_trans - TPM_trans) / (FGA_trans - RIMA_trans - TPA_trans),
+            FG._half = FGM_half / FGA_half,
+            TP._half = TPM_half / TPA_half,
+            FT._half = FTM_half / FTA_half,
+            TS._half = (PTS_half / 2) / (FGA_half + .475 * FTA_half),
+            eFG._half = (FGM_half + 0.5 * TPM_half) / FGA_half,
+            RIM._half = RIMM_half / RIMA_half,
+            MIDA_half = FGA_half - TPA_half - RIMA_half,
+            MIDM_half = FGM_half - TPM_half - RIMM_half,
+            MID._half = (FGM_half - RIMM_half - TPM_half) / (FGA_half - RIMA_half - TPA_half),
+            pct_FGA_trans = FGA_trans / FGA,
+            pct_TPA_trans = TPA_trans / FGA,
+            pct_RIMA_trans = RIMA_trans / FGA,
+            pct_FGM_trans = FGM_trans / FGM,
+            pct_TPM_trans = TPM_trans / FGM,
+            pct_RIMM_trans = RIMM_trans / FGM,
+            pct_FGM_ast = FGM_ast / FGM,
+            pct_TPM_ast = TPM_ast / TPM,
+            pct_RIMM_ast = RIMM_ast / RIMM
+          ) %>%
+          dplyr::ungroup() %>%
+          dplyr::mutate_if(is.numeric, round, 3) %>%
+          dplyr::left_join(starters, by = "Player") %>%
+          dplyr::select(
+            Player, Team, GP, GS, MINS, oPOSS, PTS, ORB, DRB, AST, STL, BLK, TOV, PF, TS., eFG., FGM, FGA, FG.,
+            TPM, TPA, TP., FTM, FTA, FT., RIMM, RIMA, RIM., MIDM, MIDA, MID., PBACKM, PBACKA, PBACK., BLK_rim, BLK_mid, BLK_three,
+            pct_FGA_trans, pct_TPA_trans, pct_RIMA_trans, pct_FGM_trans, pct_TPM_trans, pct_RIMM_trans,
+            pct_FGM_ast, pct_TPM_ast, pct_RIMM_ast,
+            # Transition
+            PTS_trans, ORB_trans, DRB_trans, AST_trans, STL_trans, BLK_trans, TOV_trans, TS._trans, eFG._trans, FGM_trans, FGA_trans, FG._trans, TPM_trans, TPA_trans, TP._trans, FTM_trans, FTA_trans, FT._trans, RIMM_trans, RIMA_trans, RIM._trans, MIDM_trans, MIDA_trans, MID._trans,
+            # Half Court
+            PTS_half, ORB_half, DRB_half, AST_half, STL_half, BLK_half, TOV_half, TS._half, eFG._half, FGM_half, FGA_half, FG._half, TPM_half, TPA_half, TP._half, FTM_half, FTA_half, FT._half, RIMM_half, RIMA_half, RIM._half, MIDM_half, MIDA_half, MID._half,
+            # Assisted
+            PTS_ast, FGM_ast, TPM_ast, RIMM_ast, MIDM_ast,
+            # Unassisted
+            PTS_unast, eFG._unast, FGM_unast, FGA_unast, FG._unast, TPM_unast, TPA_unast, TP._unast, RIMM_unast, RIMA_unast, RIM._unast, MIDM_unast, MIDA_unast, MID._unast
+          )
+        }
       multi_game[is.na(multi_game)] <- 0
       return(multi_game)
-    } else{
+    } else {
       return(final_stats)
     }
 }
@@ -3400,7 +3478,7 @@ get_possessions <- function(play_by_play_data = NA, simple = F) {
         .groups = "drop"
       )
   }
-  
+
 
   missing_rows <- apply(possession_df[,which(colnames(possession_df)=="Home.1"):which(colnames(possession_df)=="Away.5")], 1, function(x){sum(is.na(x))})
   message(paste("Forced to remove", length(which(missing_rows!=0)), "rows due to missing players in on/off"))
@@ -3419,7 +3497,7 @@ get_possessions <- function(play_by_play_data = NA, simple = F) {
     #Converts the sorted back into a data frame
     sorted_df <-
       data.frame(matrix(unlist(sorted_df), ncol = ncol(possession_df), byrow=T), stringsAsFactors = F)
-    
+
     colnames(sorted_df) <- colnames(possession_df)
     sorted_df <- sorted_df %>%
       mutate(across(c("ID", "Poss_Num", "Home_Score", "Away_Score", "PTS",
