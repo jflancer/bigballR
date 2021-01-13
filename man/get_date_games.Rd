@@ -7,7 +7,10 @@
 get_date_games(
   date = as.character(format(Sys.Date() - 1, "\%m/\%d/\%Y")),
   conference = "All",
-  conference.ID = NA
+  conference.ID = NA,
+  use_file = F,
+  save_file = F,
+  base_path = NA
 )
 }
 \arguments{

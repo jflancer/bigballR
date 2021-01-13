@@ -4,28 +4,10 @@
 \alias{get_lineups}
 \title{Lineup Compiler}
 \usage{
-get_lineups(
-  play_by_play_data = NA,
-  keep.dirty = F,
-  garbage.filter = F,
-  error.thresh = 5
-)
+get_lineups(play_by_play_data = NA, include_transition = F)
 }
 \arguments{
 \item{play_by_play_data}{data frame consisting of play-by-play data from the functions scrape_game() or get_play_by_play()}
-
-\item{keep.dirty}{logical variable to specify whether or not to filter out potentially inaccurrate data. When FALSE,
-will remove all rows from games where the number of discrepencies is above the desired count. Defaults to FALSE.}
-
-\item{garbage.filter}{logical variable to specify whether or not to filter out garbage time entries. Uses format similar
-to cleaningtheglass.com definitions, but adjusted because of different time/scoring format. This is very subjective with no
-true criteria or reasoning. Follows rule: a game that enters garbage time cannot exit even if a team comes back.
-The remainder of a game is garbage time once a team is: Up by 25+ with 5 mins gone in 2nd half, up 20 with 10 mins gone in 2nd half,
-up 15 with 16 mins gone in 2nd half. Defaults to FALSE, which means garbage time will not be removed}
-
-\item{error.thresh}{numeric variable that lets user set their preferred discrepancy threshold with the keep.dirty variable. This means
-when less than the threshold occurs in a game, it will be considered clean. As defined in scrape_game(), a discrepancy occurs when a
-player registers an event when they are not found to be on the court. Defaults to 5 discrepancies.}
 }
 \value{
 data frame with each row representing a unique lineup. All stats for entire lineup or opponent (o- prefix)
@@ -62,11 +44,10 @@ data frame with each row representing a unique lineup. All stats for entire line
 \item{BLKrate} - Block rate: BLK/FGA
 \item{ORB.} - Offensive rebound percentage: ORB / (ORB + oDRB)
 \item{DRB.} - Defensive rebound percentage: DRB / (DRB + oORB)
-\item{OEFF} - Offensive efficiency: 100 * (PTS/POSS)
-\item{DEFF} - Defensive efficiency: 100 * (oPTS/POSS)
-\item{NETEFF} - Net efficiency: OEFF - DEFF
-\item{PACE} - Average time per possession (Seconds): (Possessions / Mins) * 60
-\item{ShotsPerPoss} - Estimate of shot attempts per possession: 1 + (ORB - TO) / POSS,
+\item{ORTG} - Offensive efficiency: 100 * (PTS/POSS)
+\item{DRTG} - Defensive efficiency: 100 * (oPTS/POSS)
+\item{NETRTG} - Net efficiency: OEFF - DEFF
+\item{TimePerPoss} - Average time per possession (Seconds): (Possessions / Mins) * 60
 }
 }
 \description{

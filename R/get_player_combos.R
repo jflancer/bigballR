@@ -3,7 +3,7 @@
 #'
 #' Pass in lineup data and get team stats when a specified grouping of players are on the court together.
 #' This can work for any 1-5 player combinations. It also takes in the functions Included/Excluded, to filter
-#' when certain players are on the court together.
+#' when certain players are on the court together. Recommended to filter lineups by team before calling this function rather than after.
 #' @param Lineup_Data data frame made up of lineups collected from the get_lineups() function
 #' @param n an integer between 1-5 specifying player combinations
 #' @param min_mins a filter value to remove combinations below a minutes threshold. Using this beforehand greatly speeds up computation time.
@@ -51,7 +51,7 @@ team_comb <- function(team_lineups, mins = 0, n = 2) {
   # Borrows code from on_off_generator, but this call is much reduced so to speed up does not directly call on_off_generator
   a <- apply(combs, 1, function(x){
     final <- get_player_lineups(team_lineups, Included = x) %>%
-      dplyr::summarise_if(is.numeric, sum) %>%
+      dplyr::summarise(across(where(is.numeric), sum)) %>%
       dplyr::mutate(
         ORTG = PTS / ePOSS * 100,
         DRTG = oPTS / ePOSS * 100,
@@ -90,9 +90,8 @@ team_comb <- function(team_lineups, mins = 0, n = 2) {
         ShotsPerPoss = 1 + (ORB - TO) / POSS,
         oShotsPerPoss = 1 + (oORB - oTO) / oPOSS,
       ) %>%
-      dplyr::select(Mins:oPTS, POSS:NETRTG, everything())
-    final[is.na(final)] <- 0
-    final[1:nrow(final),] <- apply(final[1:nrow(final),], 2, function(z){ifelse(is.infinite(z),0,z)})
+      dplyr::select(Mins:oPTS, POSS:NETRTG, everything()) %>%
+      summarise(across(where(is.numeric), function(x){ifelse(is.infinite(x) | is.na(x), 0, round(x, 2))}))
     if(length(x) == 1) {
       z <- cbind(data.frame(X1 = matrix(rep(x,nrow(final)), nrow = nrow(final)), stringsAsFactors = F), final)
     } else {
@@ -100,4 +99,6 @@ team_comb <- function(team_lineups, mins = 0, n = 2) {
     }
   }) %>% dplyr::bind_rows() %>%
     dplyr::rename_at(dplyr::vars(dplyr::contains("X")), list(~gsub("X","P",.)))
+
+  return(a)
 }

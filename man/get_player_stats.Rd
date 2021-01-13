@@ -4,25 +4,19 @@
 \alias{get_player_stats}
 \title{Player Stats Calculator}
 \usage{
-get_player_stats(
-  play_by_play_data = NA,
-  keep.dirty = F,
-  garbage.filter = F,
-  error.thresh = 5,
-  multi.games = F
-)
+get_player_stats(play_by_play_data = NA, multi.games = F, simple = F)
 }
 \arguments{
 \item{play_by_play_data}{a data frame of play-by-play data from either get_play_by_play() or scrape_game()}
+
+\item{multi.games}{Logical object. When false stats will be calculated on a game level. When true all games will be aggregated
+this can be used to get season or multi-game player stats. Defaults to FALSE.}
 
 \item{keep.dirty}{logical object to remove entries from potentially corrupted games. Explained in get_lineups()}
 
 \item{garbage.filter}{logical object to remove garbage time minutes from the sample. Explained in get_lineups()}
 
 \item{error.thresh}{determine how many discrepancies can still occur for a game to be included. Explained in get_lineups()}
-
-\item{multi.games}{Logical object. When false stats will be calculated on a game level. When true all games will be aggregated
-this can be used to get season or multi-game player stats. Defaults to FALSE.}
 }
 \value{
 

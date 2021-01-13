@@ -4,7 +4,13 @@
 \alias{get_play_by_play}
 \title{Multiple Game Play-By-Play Scraper}
 \usage{
-get_play_by_play(game_ids)
+get_play_by_play(
+  game_ids,
+  use_file = F,
+  save_file = F,
+  base_path = NA,
+  overwrite = F
+)
 }
 \arguments{
 \item{game_ids}{A string/numeric object or vector containing game ids}

@@ -4,7 +4,15 @@
 \alias{get_team_schedule}
 \title{Team Schedule Scrape}
 \usage{
-get_team_schedule(team.id = NA, season = NA, team.name = NA)
+get_team_schedule(
+  team.id = NA,
+  season = NA,
+  team.name = NA,
+  use_file = F,
+  save_file = F,
+  base_path = NA,
+  overwrite = F
+)
 }
 \arguments{
 \item{team.id}{The unique id given to each college/team for each season. This can be found in the url of the team page.}
@@ -29,8 +37,7 @@ data frame with each row representing an individual game
 }
 \description{
 This function returns a data frame of the schedule for the specified team. This will include game ids used
-for play-by-play scraping if the game has ended, along with the team scores and attendance. Note: currently,
-the season/team.name parameters can only be used for the 2016-17, 2017-18, 2018-19 seasons
+for play-by-play scraping if the game has ended, along with the team scores and attendance.
 }
 \examples{
 get_team_schedule(team.id = 450680)
