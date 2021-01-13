@@ -1,5 +1,7 @@
 # bigballR
 
+###NOTE THIS DOCUMENTATION IS SLIGHTLY OUTDATED FOLLOWING THE LATEST PACKAGE UPDATE 1/13
+
 `bigballR` is an R package for working with NCAA Basketball data. This 
 package primarily revolves around the use of schedule, roster, and play-by-play data via stats.ncaa.com, and
 additionally has features to calculate lineups, on/off results, and player game and multi-game statistics.
