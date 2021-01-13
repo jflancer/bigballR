@@ -1106,7 +1106,7 @@ get_date_games <-
     # The pbp only goes back to 2011 in most cases, so no need to pull deeper
     seasonid <- case_when(
       # 20-21
-      dateform > as.Date("2012-05-01") &
+      dateform > as.Date("2020-05-01") &
         dateform <= as.Date("2021-05-01") ~ 17420,
       # 19-20
       dateform > as.Date("2019-05-01") &
