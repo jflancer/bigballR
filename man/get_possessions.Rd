@@ -4,7 +4,7 @@
 \alias{get_possessions}
 \title{Possession Parsing}
 \usage{
-get_possessions(play_by_play_data = NA)
+get_possessions(play_by_play_data = NA, simple = F)
 }
 \arguments{
 \item{play_by_play_data}{dataframe of play by play data from get_play_by_play}

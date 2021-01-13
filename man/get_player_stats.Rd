@@ -4,7 +4,7 @@
 \alias{get_player_stats}
 \title{Player Stats Calculator}
 \usage{
-get_player_stats(play_by_play_data = NA, multi.games = F)
+get_player_stats(play_by_play_data = NA, multi.games = F, simple = F)
 }
 \arguments{
 \item{play_by_play_data}{a data frame of play-by-play data from either get_play_by_play() or scrape_game()}
