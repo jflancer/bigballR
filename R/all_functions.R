@@ -2634,6 +2634,8 @@ get_player_stats <- function(play_by_play_data = NA, multi.games = F, simple = F
         STL = sum((Event_Type == "Steal"), na.rm = T),
         BLK = sum((Event_Type == "Blocked Shot"), na.rm = T),
         PF = sum((Event_Type == "Commits Foul"), na.rm = T),
+        FGA_trans = sum((Shot_Value %in% c(2, 3)) * isTransition, na.rm = T),
+        FGM_ast = sum((Shot_Value %in% c(2, 3)) * (Event_Result == "made") * (!is.na(Player_2)), na.rm = T),
         .groups = 'drop'
       ) %>%
       dplyr::filter(Player_1 != "TEAM") %>%
@@ -2784,7 +2786,7 @@ get_player_stats <- function(play_by_play_data = NA, multi.games = F, simple = F
         dplyr::mutate_if(is.numeric, round, 3) %>%
         dplyr::select(
           ID:Player, MINS, oPOSS, PTS, ORB, DRB, AST, STL, BLK, TOV, PF, TS., eFG., FGM, FGA, FG.,
-          TPM, TPA, TP., FTM, FTA, FT., RIMM, RIMA, RIM., MIDM, MIDA, MID.)
+          TPM, TPA, TP., FTM, FTA, FT., RIMM, RIMA, RIM., MIDM, MIDA, MID., FGA_trans, FGM_ast)
       final_stats[,7:ncol(final_stats)][is.na(final_stats[,7:ncol(final_stats)])] <- 0
     } else {
       final_stats <- final_stats %>%
@@ -2882,12 +2884,15 @@ get_player_stats <- function(play_by_play_data = NA, multi.games = F, simple = F
             RIM. = RIMM / RIMA,
             MIDA = FGA - TPA - RIMA,
             MIDM = FGM - TPM - RIMM,
-            MID. = (FGM - RIMM - TPM) / (FGA - RIMA - TPA)) %>%
+            MID. = (FGM - RIMM - TPM) / (FGA - RIMA - TPA),
+            PCT_FGA_trans = FGA_trans / FGA,
+            PCT_FGM_ast = FGM_ast / FGM
+            ) %>%
           dplyr::ungroup() %>%
           dplyr::mutate_if(is.numeric, round, 3) %>%
           dplyr::left_join(starters, by = "Player") %>%
           dplyr::select(
-            Player, Team, GP, GS, MINS, oPOSS, PTS, ORB, DRB, AST, STL, BLK, TOV, PF, TS., eFG., FGM, FGA, FG.,
+            Player, Team, GP, GS, MINS, oPOSS, PTS, ORB, DRB, AST, STL, BLK, TOV, PF, PCT_FGA_trans, PCT_FGM_ast, TS., eFG., FGM, FGA, FG.,
             TPM, TPA, TP., FTM, FTA, FT., RIMM, RIMA, RIM., MIDM, MIDA, MID.)
       } else {
         multi_game <- final_stats %>%
