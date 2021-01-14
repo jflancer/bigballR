@@ -1384,7 +1384,13 @@ get_team_schedule <-
     }
 
     tables <- XML::readHTMLTable(html)
-    df <- data.frame(as.matrix(tables[[2]]), stringsAsFactors = F)
+    if(!is.null(tables[[2]])) {
+      df <- data.frame(as.matrix(tables[[2]]), stringsAsFactors = F)  
+    } else {
+      message(paste(team.id, "has no schedule"))
+      return(data.frame())
+    }
+    
 
     #New
     df <- df[seq(1,nrow(df), by = 2),]
