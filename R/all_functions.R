@@ -1104,7 +1104,7 @@ get_date_games <-
 
     # Find the season id needed by the url given the date of the game
     # The pbp only goes back to 2011 in most cases, so no need to pull deeper
-    seasonid <- case_when(
+    seasonid <- dplyr::case_when(
       # 20-21
       dateform > as.Date("2020-05-01") &
         dateform <= as.Date("2021-05-01") ~ 17420,
@@ -1257,6 +1257,11 @@ get_date_games <-
       unlist(stringr::str_extract_all(html, "(?<=/contests/)\\d+(?=/box_score)"))
     game_ids <- game_ids[which(!game_ids %in% seasonid)]
 
+    # Handle cancelled games with missing game ids
+    id_found <- rep(NA, length(away_score))
+    id_found[!away_score %in% c("Canceled", "Ppd")] <- game_ids
+
+
     #Also creates variable used to find if a game was held at a neutral side
     isNeutral <- table$V6[starting_rows] != ""
 
@@ -1266,8 +1271,9 @@ get_date_games <-
     # Unfortunately, the game ID for boxscore isn't the same as the game ID for pbp
     # As a result, this function needs to convert from boxscore to pbp but as a result be slower
     # Need to read each box score page and find link to pbp page
+
     url2 <-
-      paste0("http://stats.ncaa.org/contests/", game_ids, "/box_score")
+      paste0("http://stats.ncaa.org/contests/", id_found, "/box_score")
 
     # Clean team names
     home_name = gsub(" [(].*[)]","", home_team)
@@ -1284,7 +1290,7 @@ get_date_games <-
       Start_Time = substr(game_date, 12, 19),
       Home = home_name,
       Away = away_name,
-      BoxID = game_ids,
+      BoxID = id_found,
       GameID = NA,
       Home_Score = home_score,
       Away_Score = away_score,
@@ -1300,16 +1306,40 @@ get_date_games <-
     )
 
     # Have to iterate through every game for the given day and find all play by play ids on the box score page
-    if(length(game_ids)>0){
-      for (i in 1:length(url2)) {
-        file_url <- url(url2[i], headers = c("User-Agent" = "My Custom User Agent"))
-        temp_html <- readLines(con = file_url, warn=F)
-        close(file_url)
-        new_id <- unlist(stringr::str_extract(temp_html, "(?<=play_by_play/)\\d+"))
-        new_id <- unique(new_id[!is.na(new_id)])
-        game_data$GameID[i] <- new_id
-        Sys.sleep(0.5)
+    if(length(id_found)>0){
+      pb = txtProgressBar(min = 0, max = length(id_found), initial = 0)
+      for (i in 1:length(id_found)) {
+        if(url2[i] !=  "http://stats.ncaa.org/contests/NA/box_score") {
+          file_dir <- paste0(base_path, "box_score/")
+          file_path <- paste0(file_dir, id_found[i], ".html")
+          isUrlRead <- F
+
+          # Assumes that if pbp is available from file it will always be used rather than re-scraping
+          if (!is.na(base_path) & file.exists(file_path)) {
+            temp_html <- readLines(file_path, warn=F)
+          } else {
+            isUrlRead <- T
+            file_url <- url(url2[i], headers = c("User-Agent" = "My Custom User Agent"))
+            temp_html <- readLines(con = file_url, warn=F)
+            close(file_url)
+          }
+
+          # Give user option to save raw html file (to make future processing more efficient)
+          if (save_file & !is.na(base_path) & !file.exists(file_path)) {
+            dir.create(file_dir, recursive = T, showWarnings = F)
+            writeLines(temp_html, file_path)
+          }
+
+          new_id <- unlist(stringr::str_extract(temp_html, "(?<=play_by_play/)\\d+"))
+          new_id <- unique(new_id[!is.na(new_id)])
+          game_data$GameID[i] <- new_id
+          if(isUrlRead) {
+            Sys.sleep(0.5)
+          }
+          setTxtProgressBar(pb,i)
+        }
       }
+      close(pb)
     } else {
       message("No Game IDs Found")
     }
@@ -1385,12 +1415,12 @@ get_team_schedule <-
 
     tables <- XML::readHTMLTable(html)
     if(!is.null(tables[[2]])) {
-      df <- data.frame(as.matrix(tables[[2]]), stringsAsFactors = F)  
+      df <- data.frame(as.matrix(tables[[2]]), stringsAsFactors = F)
     } else {
       message(paste(team.id, "has no schedule"))
       return(data.frame())
     }
-    
+
 
     #New
     df <- df[seq(1,nrow(df), by = 2),]
