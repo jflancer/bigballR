@@ -9,7 +9,8 @@ get_player_combos(
   n = 2,
   min_mins = 0,
   Included = NA,
-  Excluded = NA
+  Excluded = NA,
+  include_transition = F
 )
 }
 \arguments{
