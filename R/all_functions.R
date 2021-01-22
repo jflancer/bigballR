@@ -1277,12 +1277,12 @@ get_date_games <-
 
     # Clean team names
     home_name = gsub(" [(].*[)]","", home_team)
-    home_wins = unlist(stringr::str_extract_all(home_team, "(?<=[(])\\d+(?=-)"))
-    home_losses = unlist(stringr::str_extract_all(home_team, "(?<=-)\\d+(?=[)])"))
+    home_wins = as.vector(stringr::str_extract_all(home_team, "(?<=[(])\\d+(?=-)", T))
+    home_losses = as.vector(stringr::str_extract_all(home_team, "(?<=-)\\d+(?=[)])", T))
 
     away_name = gsub(" [(].*[)]","", away_team)
-    away_wins = unlist(stringr::str_extract_all(away_team, "(?<=[(])\\d+(?=-)"))
-    away_losses = unlist(stringr::str_extract_all(away_team, "(?<=-)\\d+(?=[)])"))
+    away_wins = as.vector(stringr::str_extract_all(away_team, "(?<=[(])\\d+(?=-)", T))
+    away_losses = as.vector(stringr::str_extract_all(away_team, "(?<=-)\\d+(?=[)])", T))
 
     #Create dataframe
     game_data <- data.frame(
@@ -3126,28 +3126,28 @@ plot_mins_dist <- function(play_by_play_data = NA, team = NA, threshold = NA, sp
 
   home_team <- play_by_play_data %>%
     dplyr::filter(Home == team) %>%
-    dplyr::select(Home,Away,Game_Seconds, Home.1:Home.5) %>%
+    dplyr::select(ID,Home,Away,Game_Seconds, Home.1:Home.5) %>%
     dplyr::mutate(Game_Mins = Game_Seconds %/% 60)
   away_team <- play_by_play_data %>%
     dplyr::filter(Away == team) %>%
-    dplyr::select(Home,Away,Game_Seconds,Away.1:Away.5) %>%
+    dplyr::select(ID,Home,Away,Game_Seconds,Away.1:Away.5) %>%
     dplyr::mutate(Game_Mins = Game_Seconds %/% 60)
 
-  all_players <- data.frame(Game_Mins = NA, Player = NA, Home = NA, Away = NA)
+  all_players <- data.frame(Game_Mins = NA, Player = NA, Home = NA, Away = NA, ID = NA)
   for(i in 1:5) {
-    player_row <- home_team[,c(i+3,9,1,2)]
+    player_row <- home_team[,c(i+4,10,1:3)]
     colnames(player_row)[1] <- "Player"
     all_players <- rbind(all_players, player_row)
-    player_row <- away_team[,c(i+3,9,1,2)]
+    player_row <- away_team[,c(i+4,10,1:3)]
     colnames(player_row)[1] <- "Player"
     all_players <- rbind(all_players, player_row)
   }
 
   player_mins <- all_players %>%
-    dplyr::group_by(Player, Game_Mins, Home, Away) %>%
-    dplyr::summarise(count = dplyr::n()) %>%
+    dplyr::group_by(Player, Game_Mins, ID) %>%
+    dplyr::summarise(count = dplyr::n(), .groups = "drop") %>%
     dplyr::group_by(Player, Game_Mins) %>%
-    dplyr::summarise(count = dplyr::n()) %>%
+    dplyr::summarise(count = dplyr::n(), .groups = "drop") %>%
     dplyr::filter(!is.na(Player), !is.na(Game_Mins))
 
   totals <- expand.grid(unique(player_mins$Player), 0:40, stringsAsFactors = F)
