@@ -1284,6 +1284,11 @@ get_date_games <-
     away_wins = as.vector(stringr::str_extract_all(away_team, "(?<=[(])\\d+(?=-)", T))
     away_losses = as.vector(stringr::str_extract_all(away_team, "(?<=-)\\d+(?=[)])", T))
 
+    if(length(home_wins) == 0){home_wins = NA}
+    if(length(home_losses) == 0){home_losses = NA}
+    if(length(away_wins) == 0){away_wins = NA}
+    if(length(away_losses) == 0){away_losses = NA}
+
     #Create dataframe
     game_data <- data.frame(
       Date = substr(game_date, 1, 10),
