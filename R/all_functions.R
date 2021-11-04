@@ -1105,6 +1105,9 @@ get_date_games <-
     # Find the season id needed by the url given the date of the game
     # The pbp only goes back to 2011 in most cases, so no need to pull deeper
     seasonid <- dplyr::case_when(
+      # 21-22
+      dateform > as.Date("2021-05-01") &
+        dateform <= as.Date("2022-05-01") ~ 17783,
       # 20-21
       dateform > as.Date("2020-05-01") &
         dateform <= as.Date("2021-05-01") ~ 17420,
