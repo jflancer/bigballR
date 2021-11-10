@@ -1255,15 +1255,17 @@ get_date_games <-
     home_score <- as.character(table$V3[starting_rows + 3])
     away_score <- as.character(table$V5[starting_rows])
 
+    # sees if a box score is available for each game
+    box_score_present <- as.character(table$V1[starting_rows + 4]) == "Box Score"
+
     #This searches for all game IDs on the schedule page, using links found in the html
     game_ids <-
       unlist(stringr::str_extract_all(html, "(?<=/contests/)\\d+(?=/box_score)"))
     game_ids <- game_ids[which(!game_ids %in% seasonid)]
 
-    # Handle cancelled games with missing game ids
+    # Handle cancelled games with missing game ids, or if game is missing a box score
     id_found <- rep(NA, length(away_score))
-    id_found[!away_score %in% c("Canceled", "Ppd")] <- game_ids
-
+    id_found[!away_score %in% c("Canceled", "Ppd") & box_score_present] <- game_ids
 
     #Also creates variable used to find if a game was held at a neutral side
     isNeutral <- table$V6[starting_rows] != ""
