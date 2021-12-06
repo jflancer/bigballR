@@ -1137,7 +1137,7 @@ get_date_games <-
         dateform <= as.Date("2013-05-01") ~ 10883,
       #11-12
       dateform > as.Date("2011-05-01") &
-        dateform <= as.Date("2013-05-01") ~ 10480,
+        dateform <= as.Date("2012-05-01") ~ 10480,
       #10-11
       dateform > as.Date("2010-05-01") &
         dateform <= as.Date("2011-05-01") ~ 10220,
@@ -1342,7 +1342,9 @@ get_date_games <-
 
           new_id <- unlist(stringr::str_extract(temp_html, "(?<=play_by_play/)\\d+"))
           new_id <- unique(new_id[!is.na(new_id)])
-          game_data$GameID[i] <- new_id
+          if (length(new_id) == 1) {
+            game_data$GameID[i] <- new_id
+          }
           if(isUrlRead) {
             Sys.sleep(0.5)
           }
@@ -1362,7 +1364,7 @@ get_date_games <-
 #' This function returns a data frame of the schedule for the specified team. This will include game ids used
 #' for play-by-play scraping if the game has ended, along with the team scores and attendance.
 #' @param team.id The unique id given to each college/team for each season. This can be found in the url of the team page.
-#' @param season Season following format yyy1-y2, ex "2018=19"
+#' @param season Season following format yyy1-y2, ex "2018-19"
 #' @param team.name Alternative to using the id, you can get a team from data(teamids) with a season and team name specification.
 #' This inputs a team name, to be used along with season. This needs the school name not the complete team name, so "Duke" not "Duke Blue Devils".
 #' @importFrom XML readHTMLTable
