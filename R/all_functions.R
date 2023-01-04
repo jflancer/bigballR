@@ -318,6 +318,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         ) ~ 4,
         Event_Type == "Assist" ~ 5, # Order assist directly after shot so rows can be merged
         Event_Type == "Turnover" ~ 6,
+        Event_Type == "fromturnover" ~6
         Event_Type == "Steal" ~ 7,
         !Event_Type %in% c("Enters Game", "Leaves Game") ~ 6,
         T ~ 7
@@ -1763,6 +1764,7 @@ get_play_by_play <- function(game_ids, use_file = F, save_file = F, base_path = 
 #' \item{PTS} - Points scored
 #' \item{FGA} - Field goal attempts
 #' \item{TO} - Turnovers
+#' \item{FTO} - from Turnover                    
 #' \item{TPA} - Three point attempts
 #' \item{FGM} - Field goals made
 #' \item{TPM} - Three points made
@@ -1962,6 +1964,12 @@ get_lineups <-
             #turnovers
             TO_trans = sum((Event_Type == "Turnover") * (Event_Team == Home) * isTransition, na.rm = T),
             dTO_trans = sum((Event_Type == "Turnover") * (Event_Team == Away) * isTransition, na.rm = T),
+            #from Turnovers attempts
+            FTO_trans = sum((Event_Type == "from Turnover") * (Event_Team == Home) * isTransition, na.rm = T),
+            dFTO_trans = sum((Event_Type == "from Turnover") * (Event_Team == Away) * isTransition, na.rm = T),
+            #from Turnovers makes
+            FTO_trans = sum((Event_Type == "from Turnover") * (Event_Team == Home) * (Event_Result == "made") * isTransition, na.rm = T),
+            dFTO_trans = sum((Event_Type == "from Turnover") * (Event_Team == Away) * (Event_Result == "made") * isTransition, na.rm = T),
             #assists
             AST_trans = sum((!is.na(Player_2)) * (Event_Team == Home) * isTransition, na.rm = T),
             dAST_trans =  sum((!is.na(Player_2)) * (Event_Team == Away) * isTransition, na.rm = T),
@@ -2007,6 +2015,10 @@ get_lineups <-
             dBLK_half = sum((Event_Type == "Blocked Shot") * (Event_Team == Away) * isHalfCourt, na.rm = T),
             TO_half = sum((Event_Type == "Turnover") * (Event_Team == Home) * isHalfCourt, na.rm = T),
             dTO_half = sum((Event_Type == "Turnover") * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            FTOA_half = sum((Event_Type == "from Turnover") * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            FTOM_half = sum((Event_Type == "from Turnover") * (Event_Team == Home) * (Event_Result == "made") * isHalfCourt, na.rm = T),
+            dFTOA_half = sum((Event_Type == "from Turnover") * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            dFTOM_half = sum((Event_Type == "from Turnover") * (Event_Team == Away) * (Event_Result == "made") * isHalfCourt, na.rm = T),
             AST_half = sum((!is.na(Player_2)) * (Event_Team == Home) * isHalfCourt, na.rm = T),
             dAST_half =  sum((!is.na(Player_2)) * (Event_Team == Away) * isHalfCourt, na.rm = T)
           ) %>%
@@ -2071,6 +2083,10 @@ get_lineups <-
         dBLK = sum((Event_Type == "Blocked Shot") * (Event_Team == Home) * 1, na.rm = T),
         TO = sum((Event_Type == "Turnover") * (Event_Team == Away) * 1, na.rm = T),
         dTO = sum((Event_Type == "Turnover") * (Event_Team == Home) * 1, na.rm = T),
+        FTOA = sum((Event_Type == "from Turnover") * (Event_Team == Away) * 1, na.rm = T),
+        FTOM = sum((Event_Type == "from Turnover") * (Event_Team == Away) * (Event_Result == "made") * 1, na.rm = T),
+        dFTOA = sum((Event_Type == "from Turnover") * (Event_Team == Home) * 1, na.rm = T),
+        dFTOM = sum((Event_Type == "from Turnover") * (Event_Team == Home) * (Event_Result == "made") * 1, na.rm = T),
         AST = sum((!is.na(Player_2)) * (Event_Team == Away) * 1, na.rm = T),
         dAST =  sum((!is.na(Player_2)) * (Event_Team == Home) * 1, na.rm = T)
       ) %>%
@@ -2136,6 +2152,10 @@ get_lineups <-
             dBLK_trans = sum((Event_Type == "Blocked Shot") * (Event_Team == Home) * isTransition, na.rm = T),
             TO_trans = sum((Event_Type == "Turnover") * (Event_Team == Away) * isTransition, na.rm = T),
             dTO_trans = sum((Event_Type == "Turnover") * (Event_Team == Home) * isTransition, na.rm = T),
+            FTOA_trans = sum((Event_Type == "from Turnover") * (Event_Team == Away) * isTransition, na.rm = T),
+            FTOM_trans = sum((Event_Type == "from Turnover") * (Event_Team == Away) * (Event_Result == "made") * isTransition, na.rm = T),
+            dFTOA_trans = sum((Event_Type == "from Turnover") * (Event_Team == Home) * isTransition, na.rm = T),
+            dFTOM_trans = sum((Event_Type == "from Turnover") * (Event_Team == Home) * (Event_Result == "made") * isTransition, na.rm = T),
             AST_trans = sum((!is.na(Player_2)) * (Event_Team == Away) * isTransition, na.rm = T),
             dAST_trans =  sum((!is.na(Player_2)) * (Event_Team == Home) * isTransition, na.rm = T),
             # HALF COURT
@@ -2179,6 +2199,10 @@ get_lineups <-
             dBLK_half = sum((Event_Type == "Blocked Shot") * (Event_Team == Home) * isHalfCourt, na.rm = T),
             TO_half = sum((Event_Type == "Turnover") * (Event_Team == Away) * isHalfCourt, na.rm = T),
             dTO_half = sum((Event_Type == "Turnover") * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            FTOA_half = sum((Event_Type == "from Turnover") * (Event_Team == Away) * isHalfCourt, na.rm = T),
+            FTOM_half = sum((Event_Type == "from Turnover") * (Event_Team == Away) * (Event_Result == "made") * isHalfCourt, na.rm = T),
+            dFTOA_half = sum((Event_Type == "from Turnover") * (Event_Team == Home) * isHalfCourt, na.rm = T),
+            dFTOM_half = sum((Event_Type == "from Turnover") * (Event_Team == Home) * (Event_Result == "made") * isHalfCourt, na.rm = T),
             AST_half = sum((!is.na(Player_2)) * (Event_Team == Away) * isHalfCourt, na.rm = T),
             dAST_half =  sum((!is.na(Player_2)) * (Event_Team == Home) * isHalfCourt, na.rm = T)
           ) %>%
@@ -3072,6 +3096,7 @@ convert_events <- function(events) {
     grepl("alleyoop", events) &
       grepl("missed", events) ~ "missed Dunk",
     grepl("turnover", events) ~ "Turnover",
+    grepl("fromturnover", events) ~ "from Turnover"
     is.na(events) ~ NA_character_,
     #if this comes up, I have not discovered the event and need to classify and convert it
     TRUE ~ "ERROR CHECK THE EVENT"
