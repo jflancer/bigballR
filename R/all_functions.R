@@ -1436,9 +1436,9 @@ get_team_schedule <-
       return(data.frame())
     }
 
-
-    #New
     df <- df[seq(1,nrow(df), by = 2),]
+    df <- df[!is.na(df$Opponent),]
+
 
     game_ids <-
       unlist(stringr::str_extract_all(html, "(?<=contests/)\\d+(?=[/])"))
