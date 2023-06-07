@@ -3080,40 +3080,27 @@ convert_events <- function(events) {
 }
 
 get_mins <- function(play_by_play_data) {
-  #since players can appear in 10 different columns, iterate through each to calculate on court stats efficiently
-  #create column names for all of the home/away matrix
-  cols <- paste0(rep(c("Home", "Away"), each = 5), ".", rep(1:5, 2))
-  #will store player calculatings for each column
-  player_data <- list()
-  #iterate through each player column
-  for (i in 1:10) {
-    #group by the given player column in iteration
-    #calculate stats needed to get the players minutes and possessions on the court for
-    player <- play_by_play_data %>%
-      dplyr::group_by_at(c(cols[i], "ID")) %>%
-      dplyr::mutate(
-        POSS_num = ifelse((Poss_Team == Home & i <= 5 | Poss_Team == Away & i > 5), as.numeric(Poss_Num), NA)
-      ) %>%
-      dplyr::summarise(
-        Mins = sum(Event_Length, na.rm = T) / 60,
-        # Get total possessions by the count of distinct possession numbers
-        oPOSS = dplyr::n_distinct(paste(ID,POSS_num), na.rm = T),
-        .groups = "drop"
-      ) %>%
-      dplyr::ungroup() %>%
-      dplyr::rename(Player =  cols[i]) %>%
-      dplyr::mutate_if(is.numeric, round, 3) %>%
-      dplyr::ungroup()
-    #once this is calculated add to the data frame of all player columns
-    player_data[[i]] <- player
-  }
-  player_data <- dplyr::bind_rows(player_data)
-  #can now group by each player name and get their total minutes and possessions
-  final_df <- player_data %>%
-    dplyr::group_by(Player, ID) %>%
-    dplyr::summarise(MINS = sum(Mins),
-                     oPOSS = sum(oPOSS),
-                     .groups = "drop") %>%
+  final_df <- play_by_play_data %>%
+    dplyr::mutate(
+      home_poss = (Home == Poss_Team)
+    ) %>%
+    dplyr::select(ID, home_poss, Event_Length, Poss_Num, tidyselect::matches('(Home|Away)\\.[1-5]')) %>%
+    tidyr::pivot_longer(cols = tidyselect::matches('(Home|Away)\\.[1-5]')) %>%
+    dplyr::mutate(
+      isOffense = dplyr::case_when(
+        home_poss & grepl('Home', name) ~ T,
+        !home_poss & grepl('Away', name) ~ T,
+        T ~ F
+      )
+    ) %>%
+    dplyr::group_by(ID, value) %>%
+    dplyr::summarise(
+      MINS = sum(Event_Length) / 60,
+      oPOSS = dplyr::n_distinct(Poss_Num[which(isOffense)]),
+      .groups = 'drop'
+    ) %>%
+    dplyr::rename(Player =  value) %>%
+    dplyr::mutate_if(is.numeric, round, 3) %>%
     dplyr::ungroup()
 }
 binder <- dplyr::bind_rows
