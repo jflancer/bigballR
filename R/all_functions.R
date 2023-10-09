@@ -3443,9 +3443,9 @@ get_box_scores <- function(game_ids, multi.games = F, use_file = F, save_file = 
   game_data <- game_data %>%
     dplyr::filter(MP != '') %>%
     dplyr::mutate(
-      dplyr::across(all_of(c("G", "FGM", "FGA", "TPM", "TPA", "FTM", "FTA", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "Fouls", "DQ", "Tech")), function(x){x[x==''] <- 0; return(x)}),
-      dplyr::across(all_of(c("MP", "G", "FGM", "FGA", "TPM", "TPA", "FTM", "FTA", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "Fouls", "DQ", "Tech")), ~gsub("\\/", "", .x)),
-      dplyr::across(all_of(c("G", "FGM", "FGA", "TPM", "TPA", "FTM", "FTA", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "Fouls", "DQ", "Tech")), as.numeric),
+      dplyr::across(all_of(c("FGM", "FGA", "TPM", "TPA", "FTM", "FTA", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "Fouls", "Tech")), function(x){x[x==''] <- 0; return(x)}),
+      dplyr::across(all_of(c("MP","FGM", "FGA", "TPM", "TPA", "FTM", "FTA", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "Fouls","Tech")), ~gsub("\\/", "", .x)),
+      dplyr::across(all_of(c("FGM", "FGA", "TPM", "TPA", "FTM", "FTA", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "Fouls", "Tech")), as.numeric),
       MP = round(as.numeric(gsub(":(.*)", "", MP)) + as.numeric(gsub("(.*):", "", MP))/60, 1),
       FG. = FGM / FGA,
       TP. = TPM / TPA,
@@ -3455,7 +3455,7 @@ get_box_scores <- function(game_ids, multi.games = F, use_file = F, save_file = 
       dplyr::across(where(is.numeric), function(x){x[is.nan(x)] <- 0; return(x)})
     ) %>%
     dplyr::select(
-      Game_ID:MP, PTS, ORB, DRB, TRB, AST, TO, STL, BLK, FGA, FGM, FG., TPA, TPM, TP., FTA, FTM, FT., TS., eFG., Fouls, DQ, Tech, CleanName
+      Game_ID:MP, PTS, ORB, DRB, TRB, AST, TO, STL, BLK, FGA, FGM, FG., TPA, TPM, TP., FTA, FTM, FT., TS., eFG., Fouls, Tech, CleanName
     )
 
   if (multi.games == T) {
@@ -3475,7 +3475,7 @@ get_box_scores <- function(game_ids, multi.games = F, use_file = F, save_file = 
         eFG. = (FGM + 0.5 * TPM) / FGA) %>%
       dplyr::mutate(dplyr::across(where(is.numeric), function(x){x[is.nan(x)] <- 0; return(x)})) %>%
       dplyr::select(
-        Player, CleanName, Team, Pos, MP, G, PTS, ORB, DRB, TRB, AST, TO, STL, BLK, FGA, FGM, FG., TPA, TPM, TP., FTA, FTM, FT., TS., eFG., Fouls, DQ, Tech, CleanName
+        Player, CleanName, Team, Pos, MP, G, PTS, ORB, DRB, TRB, AST, TO, STL, BLK, FGA, FGM, FG., TPA, TPM, TP., FTA, FTM, FT., TS., eFG., Fouls, Tech, CleanName
       )
 
       return(multi_game)
