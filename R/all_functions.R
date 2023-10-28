@@ -1439,9 +1439,6 @@ get_team_schedule <-
       return(data.frame())
     }
 
-    df[13,]
-    df[7,]
-
     df <- df[seq(1,nrow(df), by = 2),]
     df <- df[!is.na(df$Opponent),]
 
