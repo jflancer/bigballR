@@ -1442,6 +1442,11 @@ get_team_schedule <-
     df <- df[seq(1,nrow(df), by = 2),]
     df <- df[!is.na(df$Opponent),]
 
+    # fix strings like "Campbell 2022-23 MBB App State MTE" and "UC Santa Barbara @Phoenix, AZ (2022-23 MBB Jerry Colangelo Classic)"
+    df$Opponent <- df$Opponent |>
+      str_remove(" 202.*$") |>
+      str_remove(" \\@[A-Z].*$")
+
 
     game_ids <-
       unlist(stringr::str_extract_all(html, "(?<=contests/)\\d+(?=[/])"))
@@ -1594,7 +1599,8 @@ get_team_schedule <-
     ))
 
     return(team_data)
-}
+  }
+
 
 #' Team Roster Scrape
 #'
@@ -3446,9 +3452,9 @@ get_box_scores <- function(game_ids, multi.games = F, use_file = F, save_file = 
   game_data <- game_data %>%
     dplyr::filter(MP != '') %>%
     dplyr::mutate(
-      dplyr::across(all_of(c("G", "FGM", "FGA", "TPM", "TPA", "FTM", "FTA", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "Fouls", "DQ", "Tech")), function(x){x[x==''] <- 0; return(x)}),
-      dplyr::across(all_of(c("MP", "G", "FGM", "FGA", "TPM", "TPA", "FTM", "FTA", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "Fouls", "DQ", "Tech")), ~gsub("\\/", "", .x)),
-      dplyr::across(all_of(c("G", "FGM", "FGA", "TPM", "TPA", "FTM", "FTA", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "Fouls", "DQ", "Tech")), as.numeric),
+      dplyr::across(any_of(c("G", "FGM", "FGA", "TPM", "TPA", "FTM", "FTA", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "Fouls", "DQ", "Tech")), function(x){x[x==''] <- 0; return(x)}),
+      dplyr::across(any_of(c("MP", "G", "FGM", "FGA", "TPM", "TPA", "FTM", "FTA", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "Fouls", "DQ", "Tech")), ~gsub("\\/", "", .x)),
+      dplyr::across(any_of(c("G", "FGM", "FGA", "TPM", "TPA", "FTM", "FTA", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "Fouls", "DQ", "Tech")), as.numeric),
       MP = round(as.numeric(gsub(":(.*)", "", MP)) + as.numeric(gsub("(.*):", "", MP))/60, 1),
       FG. = FGM / FGA,
       TP. = TPM / TPA,
@@ -3458,7 +3464,8 @@ get_box_scores <- function(game_ids, multi.games = F, use_file = F, save_file = 
       dplyr::across(where(is.numeric), function(x){x[is.nan(x)] <- 0; return(x)})
     ) %>%
     dplyr::select(
-      Game_ID:MP, PTS, ORB, DRB, TRB, AST, TO, STL, BLK, FGA, FGM, FG., TPA, TPM, TP., FTA, FTM, FT., TS., eFG., Fouls, DQ, Tech, CleanName
+      Game_ID:MP,
+      any_of(c("PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "FGA", "FGM", "FG.", "TPA", "TPM", "TP.", "FTA", "FTM", "FT.", "TS.", "eFG.", "Fouls", "DQ", "Tech", "CleanName"))
     )
 
   if (multi.games == T) {
