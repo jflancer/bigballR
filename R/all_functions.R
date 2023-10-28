@@ -1439,8 +1439,16 @@ get_team_schedule <-
       return(data.frame())
     }
 
+    df[13,]
+    df[7,]
+
     df <- df[seq(1,nrow(df), by = 2),]
     df <- df[!is.na(df$Opponent),]
+
+    # fix strings like "Campbell 2022-23 MBB App State MTE" and "UC Santa Barbara @Phoenix, AZ (2022-23 MBB Jerry Colangelo Classic)"
+    df$Opponent <- df$Opponent |>
+      str_remove(" 202.*$") |>
+      str_remove(" \\@[A-Z].*$")
 
 
     game_ids <-
@@ -1594,7 +1602,8 @@ get_team_schedule <-
     ))
 
     return(team_data)
-}
+  }
+
 
 #' Team Roster Scrape
 #'
