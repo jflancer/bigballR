@@ -52,7 +52,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
   #track status of cleanliness of data for game
   status <- "CLEAN"
 
-  base_url <- "http://stats.ncaa.org/game/play_by_play/"
+  base_url <- "https://stats.ncaa.org/game/play_by_play/"
   url_text <- paste0(base_url, game_id)
   file_dir <- paste0(base_path, "play_by_play/")
   file_path <- paste0(file_dir, game_id, ".html")
@@ -1210,7 +1210,7 @@ get_date_games <-
     #pulls the necessary url
     url_text <-
       paste0(
-        "http://stats.ncaa.org/season_divisions/",
+        "https://stats.ncaa.org/season_divisions/",
         seasonid,
         "/scoreboards?game_date=",
         date2,
@@ -1284,7 +1284,7 @@ get_date_games <-
     # Need to read each box score page and find link to pbp page
 
     url2 <-
-      paste0("http://stats.ncaa.org/contests/", id_found, "/box_score")
+      paste0("https://stats.ncaa.org/contests/", id_found, "/box_score")
 
     # Clean team names (remove records, like "Rutgers (1-0)")
     home_name = gsub(" [(][0-9].*[)]","", home_team)
@@ -1325,7 +1325,7 @@ get_date_games <-
     if(length(id_found)>0){
       pb = txtProgressBar(min = 0, max = length(id_found), initial = 0)
       for (i in 1:length(id_found)) {
-        if(url2[i] !=  "http://stats.ncaa.org/contests/NA/box_score") {
+        if(url2[i] !=  "https://stats.ncaa.org/contests/NA/box_score") {
           file_dir <- paste0(base_path, "box_score/")
           file_path <- paste0(file_dir, id_found[i], ".html")
           isUrlRead <- F
@@ -1411,7 +1411,7 @@ get_team_schedule <-
     }
 
     # Pull the relevant table from the team webpage
-    url_text <- paste0("http://stats.ncaa.org/teams/", team.id)
+    url_text <- paste0("https://stats.ncaa.org/teams/", team.id)
     file_dir <- paste0(base_path, "team_schedule/")
     file_path <- paste0(file_dir, team.id, ".html")
 
@@ -1454,7 +1454,7 @@ get_team_schedule <-
     # Game IDs links to box score game id, not play by play id
     # Unfortunately need to now parse webpage for each game played to find game id
     url2 <-
-      paste0("http://stats.ncaa.org/contests/", game_ids, "/box_score")
+      paste0("https://stats.ncaa.org/contests/", game_ids, "/box_score")
 
     new_ids <- c()
     message("Compiling Game IDs")
@@ -1647,7 +1647,7 @@ get_team_roster <-
     }
 
     #Pull html for the team page
-    url_text <- paste0("http://stats.ncaa.org/teams/", team.id)
+    url_text <- paste0("https://stats.ncaa.org/teams/", team.id)
     file_dir <- paste0(base_path, "team_schedule/")
     file_path <- paste0(file_dir, team.id, ".html")
     isUrlRead <- F
@@ -1673,7 +1673,7 @@ get_team_roster <-
     roster_link <- html[which(grepl("Roster", html))]
     roster_link <-
       stringr::str_extract_all(roster_link, "(?<=\\\")(.*)(?=[\\\"])")
-    roster_url <- paste0("http://stats.ncaa.org", roster_link)
+    roster_url <- paste0("https://stats.ncaa.org", roster_link)
     #Read html for the roster page and format it so it can be usabl
 
     file_dir <- paste0(base_path, "team_roster/")
@@ -3349,7 +3349,7 @@ scrape_box <-
 
     status <- "CLEAN"
 
-    url_text <- paste0("http://stats.ncaa.org/contests/", game_id,"/box_score")
+    url_text <- paste0("https://stats.ncaa.org/contests/", game_id,"/box_score")
     file_dir <- paste0(base_path, "box_score/")
     file_path <- paste0(file_dir, game_id, ".html")
     isUrlRead <- F
