@@ -3389,7 +3389,8 @@ scrape_box <-
 
     status <- "CLEAN"
 
-    url_text <- paste0("https://stats.ncaa.org/contests/", game_id,"/box_score")
+    # url_text <- paste0("https://stats.ncaa.org/contests/", game_id,"/box_score")
+    url_text <- paste0("https://stats.ncaa.org/contests/", game_id,"/individual_stats")
     file_dir <- paste0(base_path, "box_score/")
     file_path <- paste0(file_dir, game_id, ".html")
     isUrlRead <- F
@@ -3420,19 +3421,20 @@ scrape_box <-
 
     background <- table[[1]]
 
-    away <- table[[5]]
-    colnames(away) <- away[1,]
-    away <- away[2:(nrow(away)-1),]
-    away$Team <- gsub(" \\((.*)\\)", "", background[1,1])
+    away <- table[[4]]
+    # colnames(away) <- away[1,]
+    away <- away[2:(nrow(away)-2),]
+    away$Team <- gsub(" \\((.*)\\)", "", background[2,1])
 
-    home <- table[[6]]
-    colnames(home) <- home[1,]
-    home <- home[2:(nrow(home)-1),]
-    home$Team <- gsub(" \\((.*)\\)", "", background[2,1])
+    home <- table[[5]]
+    # colnames(home) <- home[1,]
+    home <- home[2:(nrow(home)-2),]
+    home$Team <- gsub(" \\((.*)\\)", "", background[3,1])
 
     box <- bind_rows(home, away)
 
-    clean_name <- sapply(strsplit(box$Player, ","), function(x){trimws(paste(x[length(x)],x[1]))})
+    # clean_name <- sapply(strsplit(box$Player, ","), function(x){trimws(paste(x[length(x)],x[1]))})
+    clean_name <- box$Name
     format <- gsub("[^[:alnum:] ]", "", clean_name)
     format <- toupper(gsub("\\s+",".", format))
     player_name <- gsub("(\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV)$","", format)
@@ -3443,20 +3445,20 @@ scrape_box <-
 
     box$CleanName <- clean_name
     box$Player <- player_name
-    box$Game_ID <- game_id
+    box$Contest_ID <- game_id
 
     final <- box %>%
-      rename("TPM" = "3FG", "TPA" = "3FGA", "FTM" = "FT", "ORB" = "ORebs", "DRB" = "DRebs", "TRB" = "Tot Reb", "Tech" = "Tech Fouls") %>%
-      select(Game_ID, Team, Player, everything()) %>%
+      rename("TPM" = "3FG", "TPA" = "3FGA", "FTM" = "FT", "ORB" = "ORebs", "DRB" = "DRebs", "TRB" = "TotReb", "Tech" = "TechFouls") %>%
+      select(Contest_ID, Team, Player, everything()) %>%
       filter(Player != "TEAM.TEAM")
 
     if(isUrlRead) {
       Sys.sleep(2)
     }
 
-    message(paste(background[2,1], "v", background[1,1], "|", game_id))
+    message(paste(background[3,1], "v", background[2,1], "|", game_id))
     return(final)
-}
+  }
 
 #' Box Scores Scrape
 #'
