@@ -1220,7 +1220,7 @@ get_date_games <-
     #pulls the necessary url
     url_text <-
       paste0(
-        "https://stats.ncaa.org/season_divisions/",
+        "http://stats.ncaa.org/season_divisions/",
         seasonid,
         "/scoreboards?game_date=",
         date2,
@@ -1294,14 +1294,14 @@ get_date_games <-
     # Need to read each box score page and find link to pbp page
 
     url2 <-
-      paste0("https://stats.ncaa.org/contests/", id_found, "/box_score")
+      paste0("http://stats.ncaa.org/contests/", id_found, "/box_score")
 
-    # Clean team names (remove records, like "Rutgers (1-0)")
-    home_name = gsub(" [(][0-9].*[)]","", home_team)
+    # Clean team names
+    home_name = gsub(" [(].*[)]","", home_team)
     home_wins = as.vector(stringr::str_extract_all(home_team, "(?<=[(])\\d+(?=-)", T))
     home_losses = as.vector(stringr::str_extract_all(home_team, "(?<=-)\\d+(?=[)])", T))
 
-    away_name = gsub(" [(][0-9].*[)]","", away_team)
+    away_name = gsub(" [(].*[)]","", away_team)
     away_wins = as.vector(stringr::str_extract_all(away_team, "(?<=[(])\\d+(?=-)", T))
     away_losses = as.vector(stringr::str_extract_all(away_team, "(?<=-)\\d+(?=[)])", T))
 
@@ -1335,7 +1335,7 @@ get_date_games <-
     if(length(id_found)>0){
       pb = txtProgressBar(min = 0, max = length(id_found), initial = 0)
       for (i in 1:length(id_found)) {
-        if(url2[i] !=  "https://stats.ncaa.org/contests/NA/box_score") {
+        if(url2[i] !=  "http://stats.ncaa.org/contests/NA/box_score") {
           file_dir <- paste0(base_path, "box_score/")
           file_path <- paste0(file_dir, id_found[i], ".html")
           isUrlRead <- F
@@ -1683,6 +1683,7 @@ get_team_roster <-
     }
 
     #Pull html for the team page
+    # url_text <- paste0("https://stats.ncaa.org/teams/", team.id, "/roster")
     url_text <- paste0("https://stats.ncaa.org/teams/", team.id)
     file_dir <- paste0(base_path, "team_schedule/")
     file_path <- paste0(file_dir, team.id, ".html")
@@ -1710,6 +1711,9 @@ get_team_roster <-
     roster_link <-
       stringr::str_extract_all(roster_link, "(?<=\\\")(.*)(?=[\\\"])")
     roster_url <- paste0("https://stats.ncaa.org", roster_link)
+    roster_url <- paste0("https://stats.ncaa.org/teams/", team.id, "/roster")
+
+
     #Read html for the roster page and format it so it can be usabl
 
     file_dir <- paste0(base_path, "team_roster/")
@@ -1731,11 +1735,11 @@ get_team_roster <-
       close(file_url)
     }
 
-    table <- XML::readHTMLTable(html)[[1]][, 1:5] %>%
+    table <- XML::readHTMLTable(html)[[1]][, 1:9] %>%
       mutate(across(everything(), as.character))
     # Return the more usable roster page
-    player <- table$Player
-    clean_name <- sapply(strsplit(player, ","), function(x){trimws(paste(x[length(x)],x[1]))})
+    player <- table$Name
+    clean_name <- player
     format <- gsub("[^[:alnum:] ]", "", clean_name)
     format <- toupper(gsub("\\s+",".", format))
     player_name <- gsub("(\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV)$","", format)
@@ -1743,7 +1747,7 @@ get_team_roster <-
 
     table$Player <- player_name
     table$CleanName <- clean_name
-    table$HtInches <- unname(sapply(table$Ht, function(x){
+    table$HtInches <- unname(sapply(table$Height, function(x){
       a = as.numeric(strsplit(x,"-")[[1]])
       12*a[1] + a[2]
     }))
@@ -1751,8 +1755,8 @@ get_team_roster <-
     if (isUrlRead) {
       Sys.sleep(0.5)
     }
-  return(table)
-}
+    return(table)
+  }
 
 #' Multiple Game Play-By-Play Scraper
 #'
