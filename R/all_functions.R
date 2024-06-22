@@ -54,6 +54,10 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
 
   base_url <- "https://stats.ncaa.org/game/play_by_play/"
   url_text <- paste0(base_url, game_id)
+
+  # new
+  base_url <- "https://stats.ncaa.org/contests/game_id/play_by_play/"
+  url_text <- glue::glue("https://stats.ncaa.org/contests/{game_id}/play_by_play/")
   file_dir <- paste0(base_path, "play_by_play/")
   file_path <- paste0(file_dir, game_id, ".html")
   isUrlRead <- F
@@ -77,19 +81,25 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
 
   table <- XML::readHTMLTable(html)
 
+  # temp
+  # old_table <- table
+  # new_table <- table
+  # table <- new_table
+
   if (length(table) == 0) {
     message("Game Not Found")
     return(data.frame())
   }
 
   # Pull scores for each half
-  half_scores <- table[[1]]
+  # half_scores <- table[[1]]
+  half_scores <- table[[2]][1:2,]
 
   # Get the data frames for the regulation portion
-  first_half <- table[[6]] %>%
+  first_half <- table[[4]] %>%
     dplyr::mutate_if(is.factor, as.character) %>%
     dplyr::mutate(Half_Status = 1)
-  second_half <- table[[8]] %>%
+  second_half <- table[[5]] %>%
     dplyr::mutate_if(is.factor, as.character) %>%
     dplyr::mutate(Half_Status = 2)
   game <- dplyr::bind_rows(first_half, second_half)
@@ -115,9 +125,9 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
   # As V1 is older and uses less detail, we will format the data in accordance with V1
   format <-
     if (((first_half[1, 1] == "20:00:00") &
-        (first_half[1, 2] == "game start" |
-         first_half[1, 2] == "period start"|
-         first_half[1,2] == "jumpball startperiod")) |
+         (first_half[1, 2] == "game start" |
+          first_half[1, 2] == "period start"|
+          first_half[1,2] == "jumpball startperiod")) |
         any(grepl("commercial",game[,2]))) {
       "V2"
     } else{
@@ -128,10 +138,10 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
   game <- dplyr::filter(game, !is.na(Score))
 
   # Get the game metadata
-  meta <- table[[3]]
+  meta <- table[[2]]
 
   # Get Game Date- removing start time because I don't really see a use in play by play
-  datetime <- colnames(meta)[2]
+  datetime <- meta[3,1]
   date <- substr(datetime, 1, 10)
   date <- ifelse(is.null(date),"",date)
 
@@ -423,7 +433,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     ) %>%
     dplyr::summarise(End = any(Terminal %in% c("Two Point Jumper", "Three Point Jumper", "Free Throw",
                                                "Dunk", "Layup", "Hook", "Tip In", "Steal", "Defensive Rebound"
-                                               ))*1, .groups = "keep") %>%
+    ))*1, .groups = "keep") %>%
     dplyr::ungroup() %>%
     dplyr::mutate(Valid = dplyr::lag(End, default =0)) %>%
     dplyr::select(Poss_Num, Valid)
@@ -472,11 +482,11 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         Sub_Deviate = nrow(.)
       ) %>%
       bind_cols(as.data.frame(matrix(rep(NA, nrow(dirty_game)*10),
-                       ncol = 10,
-                       nrow = nrow(dirty_game))) %>%
+                                     ncol = 10,
+                                     nrow = nrow(dirty_game))) %>%
                   rename(Home.1 = V1, Home.2 = V2, Home.3 = V3, Home.4 = V4, Home.5 = V5,
                          Away.1 = V6, Away.2 = V7, Away.3 = V8, Away.4 = V9, Away.5 = V10
-                         )) %>%
+                  )) %>%
       dplyr::select(
         ID:Away,
         Half_Status,
@@ -516,7 +526,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     # Find errors when an odd number of substitutions occur together
     mins_errors <- dirty_game %>%
       dplyr::filter(Event_Type %in% c("Leaves Game", "Enters Game"),
-             Game_Seconds != 1200) %>%
+                    Game_Seconds != 1200) %>%
       dplyr::group_by(Game_Seconds) %>%
       dplyr::summarise(count = dplyr::n(), .groups = "keep") %>%
       dplyr::ungroup() %>%
@@ -554,7 +564,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
                       # Player_1 != "TEAM",
                       Time != "00:00",
                       (Time != "20:00" & Half_Status %in% 1:2) | (Time != "05:00" & Half_Status >2)
-                      )$Player_1
+        )$Player_1
       home_entering <-
         dplyr::filter(half_data,
                       Event_Team == Home,
@@ -562,7 +572,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
                       # Player_1 != "TEAM",
                       Time != "00:00",
                       (Time != "20:00" & Half_Status %in% 1:2) | (Time != "05:00" & Half_Status >2)
-                      )$Player_1
+        )$Player_1
       away_leaving <-
         dplyr::filter(half_data,
                       Event_Team == Away,
@@ -570,22 +580,22 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
                       # Player_1 != "TEAM",
                       Time != "00:00",
                       (Time != "20:00" & Half_Status %in% 1:2) | (Time != "05:00" & Half_Status >2)
-                      )$Player_1
+        )$Player_1
       away_entering <-
         dplyr::filter(half_data,
                       Event_Team == Away,
                       Event_Type == "Enters Game",
                       # Player_1 != "TEAM",
                       (Time != "20:00" & Half_Status %in% 1:2) | (Time != "05:00" & Half_Status >2)
-                      )$Player_1
+        )$Player_1
 
       # Find players explicitly defined as starting
       true_home_starters <- (half_data %>%
-        dplyr::filter(Home == Event_Team,
-               (Time == "20:00" & Half_Status %in% 1:2) | (Time == "05:00" & Half_Status >2),
-               Time != "00:00",
-               Event_Type == "Enters Game"
-               ))$Player_1
+                               dplyr::filter(Home == Event_Team,
+                                             (Time == "20:00" & Half_Status %in% 1:2) | (Time == "05:00" & Half_Status >2),
+                                             Time != "00:00",
+                                             Event_Type == "Enters Game"
+                               ))$Player_1
 
       # Figure out starters by finding players that have a "Leaves Game" entry before an "Enters Game" entry
       if (length(home_leaving) > 0) {
@@ -600,10 +610,10 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
 
       # Find players explicitly defined as beginning from bench
       true_home_nonstarters <- (half_data %>%
-                               dplyr::filter(Home == Event_Team,
-                                             (Time == "20:00" & Half_Status %in% 1:2) | (Time == "05:00" & Half_Status >2),
-                                             Event_Type == "Leaves Game"
-                               ))$Player_1
+                                  dplyr::filter(Home == Event_Team,
+                                                (Time == "20:00" & Half_Status %in% 1:2) | (Time == "05:00" & Half_Status >2),
+                                                Event_Type == "Leaves Game"
+                                  ))$Player_1
 
       # Ignore if a player subs on for themselves at the beginning of a half
       temp_swap <- true_home_starters
@@ -675,10 +685,10 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
           #   )
           # )
           all_starters[1:5]
-        # If 5, checks have successfully found 5 starters
+          # If 5, checks have successfully found 5 starters
         } else if(length(all_starters) == 5){
           all_starters[1:5]
-        # Handle case when less than 5 starters are found even after error checks
+          # Handle case when less than 5 starters are found even after error checks
         } else {
           # Just takes first n players that have recorded an event in the half
           # all_found <- unique(c(home_starters, play_before_sub, non_subs, error_catch))
@@ -718,8 +728,8 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         players <- if(i == 1){
           unique(prior_half$Player_1, fromLast = T)[1:numb.players]
         } else {
-             rev(unique(prior_half$Player_1, fromLast = T))[1:numb.players]
-          }
+          rev(unique(prior_half$Player_1, fromLast = T))[1:numb.players]
+        }
         home_starters[is.na(home_starters)] <- players
         message(paste("5 starters not found for half",i, "choosing",players, collapse = "/"))
       }
@@ -743,21 +753,21 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         }
       }
 
-    true_away_nonstarters <- (half_data %>%
-                                dplyr::filter(Away == Event_Team,
-                                              (Time == "20:00" & Half_Status %in% 1:2) | (Time == "05:00" & Half_Status >2),
-                                              Event_Type == "Leaves Game"
-                                ))$Player_1
+      true_away_nonstarters <- (half_data %>%
+                                  dplyr::filter(Away == Event_Team,
+                                                (Time == "20:00" & Half_Status %in% 1:2) | (Time == "05:00" & Half_Status >2),
+                                                Event_Type == "Leaves Game"
+                                  ))$Player_1
 
-    temp_swap <- true_away_starters
-    true_away_starters <- true_away_starters[which(!true_away_starters %in% true_away_nonstarters)]
-    true_away_nonstarters <- true_away_nonstarters[which(!true_away_nonstarters %in% temp_swap)]
+      temp_swap <- true_away_starters
+      true_away_starters <- true_away_starters[which(!true_away_starters %in% true_away_nonstarters)]
+      true_away_nonstarters <- true_away_nonstarters[which(!true_away_nonstarters %in% temp_swap)]
 
-    away_starters <- away_starters[which(!away_starters %in% true_away_nonstarters)]
-    true_away_starters <- true_away_starters[which(!true_away_starters %in% away_starters)]
-    away_starters <- c(away_starters, true_away_starters)
+      away_starters <- away_starters[which(!away_starters %in% true_away_nonstarters)]
+      true_away_starters <- true_away_starters[which(!true_away_starters %in% away_starters)]
+      away_starters <- c(away_starters, true_away_starters)
 
-    away_starters <- if (length(away_starters) < 5) {
+      away_starters <- if (length(away_starters) < 5) {
         away_split <-
           dplyr::filter(
             half_data,
@@ -829,7 +839,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
           }
         }
       } else {
-          away_starters[1:5]
+        away_starters[1:5]
       }
 
       if(any(is.na(away_starters))){
@@ -853,12 +863,12 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
       # Repeat process is done for home and away team
 
       home_mat <- matrix(
-          c(home_starters,home_starters,rep(NA_character_, nrow(half_data) * 5 - 5)),
-          nrow = nrow(half_data) + 1, ncol = 5, byrow = T)
+        c(home_starters,home_starters,rep(NA_character_, nrow(half_data) * 5 - 5)),
+        nrow = nrow(half_data) + 1, ncol = 5, byrow = T)
 
       away_mat <- matrix(
-          c(away_starters,away_starters,rep(NA_character_, nrow(half_data) * 5 - 5)),
-          nrow = nrow(half_data) + 1, ncol = 5, byrow = T)
+        c(away_starters,away_starters,rep(NA_character_, nrow(half_data) * 5 - 5)),
+        nrow = nrow(half_data) + 1, ncol = 5, byrow = T)
 
       # Vectors of substitutes are used and diminished as events happen to track who is subbed
       home_exit_players <- if(length(home_leaving)>0){home_leaving}else{"HOPEFULLY THIS IS NOBODY'S NAME"}
@@ -965,7 +975,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     #Adds these columns to a new play by play data frame
     mild_game <-
       dplyr::bind_cols(list(dirty_game, as.data.frame(home_player_matrix, row.names = F), as.data.frame(away_player_matrix, row.names = F))
-            )
+      )
 
     #Add the event length variable which can often be helpful
     home_starters <- unlist(mild_game[1,23:27])
@@ -1004,12 +1014,12 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         ),
         # Only call garbage time if <= 3 starters are in... note: Ben Falk / CTG uses 2
         Starter_Thresh = ((Home.1 %in% home_starters) + (Home.2 %in% home_starters) +
-          (Home.3 %in% home_starters) + (Home.4 %in% home_starters) + (Home.5 %in% home_starters) +
-          (Away.1 %in% away_starters) + (Away.2 %in% away_starters) + (Away.3 %in% away_starters) +
-          (Away.4 %in% away_starters) + (Away.5 %in% away_starters)) <= 3,
+                            (Home.3 %in% home_starters) + (Home.4 %in% home_starters) + (Home.5 %in% home_starters) +
+                            (Away.1 %in% away_starters) + (Away.2 %in% away_starters) + (Away.3 %in% away_starters) +
+                            (Away.4 %in% away_starters) + (Away.5 %in% away_starters)) <= 3,
         # If both thresholds are met we hit garbage time and stay in it
         isGarbageTime = cumsum(Garbage_Thresh*Starter_Thresh) >= 1
-        ) %>%
+      ) %>%
       dplyr::select(-Garbage_Thresh, -Starter_Thresh) %>%
       # Making fix so that the players on the court to start a possession are credited for the entire possession
       dplyr::group_by(Poss_Num) %>%

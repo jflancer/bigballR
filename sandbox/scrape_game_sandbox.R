@@ -17,8 +17,8 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
   url_text <- paste0(base_url, game_id)
 
   # new
-  # base_url <- "https://stats.ncaa.org/contests/game_id/play_by_play/"
-  # url_text <- glue::glue("https://stats.ncaa.org/contests/{game_id}/play_by_play/")
+  base_url <- "https://stats.ncaa.org/contests/game_id/play_by_play/"
+  url_text <- glue::glue("https://stats.ncaa.org/contests/{game_id}/play_by_play/")
   file_dir <- paste0(base_path, "play_by_play/")
   file_path <- paste0(file_dir, game_id, ".html")
   isUrlRead <- F
@@ -57,10 +57,10 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
   half_scores <- table[[2]][1:2,]
 
   # Get the data frames for the regulation portion
-  first_half <- table[[6]] %>%
+  first_half <- table[[4]] %>%
     dplyr::mutate_if(is.factor, as.character) %>%
     dplyr::mutate(Half_Status = 1)
-  second_half <- table[[8]] %>%
+  second_half <- table[[5]] %>%
     dplyr::mutate_if(is.factor, as.character) %>%
     dplyr::mutate(Half_Status = 2)
   game <- dplyr::bind_rows(first_half, second_half)
@@ -99,10 +99,10 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
   game <- dplyr::filter(game, !is.na(Score))
 
   # Get the game metadata
-  meta <- table[[3]]
+  meta <- table[[2]]
 
   # Get Game Date- removing start time because I don't really see a use in play by play
-  datetime <- colnames(meta)[2]
+  datetime <- meta[3,1]
   date <- substr(datetime, 1, 10)
   date <- ifelse(is.null(date),"",date)
 
