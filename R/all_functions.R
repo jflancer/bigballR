@@ -81,18 +81,12 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
 
   table <- XML::readHTMLTable(html)
 
-  # temp
-  # old_table <- table
-  # new_table <- table
-  # table <- new_table
-
   if (length(table) == 0) {
     message("Game Not Found")
     return(data.frame())
   }
 
   # Pull scores for each half
-  # half_scores <- table[[1]]
   half_scores <- table[[2]][1:2,]
 
   # Get the data frames for the regulation portion
@@ -111,7 +105,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     # Iterate through overtimes and add to game data frame
     numbOTs <- length(half_scores) - 4
     for (i in 1:numbOTs) {
-      ot_data <- table[[8 + i * 2]]  %>%
+      ot_data <- table[[5 + i]]  %>%
         dplyr::mutate_if(is.factor, as.character) %>%
         dplyr::mutate(Half_Status = 2 + i)
       game <- dplyr::bind_rows(game, ot_data)
@@ -1464,49 +1458,6 @@ get_team_schedule <-
     game_ids <-
       unlist(stringr::str_extract_all(html, "(?<=contests/)\\d+(?=[/])"))
 
-    # # Game IDs links to box score game id, not play by play id
-    # # Unfortunately need to now parse webpage for each game played to find game id
-    # url2 <-
-    #   paste0("https://stats.ncaa.org/contests/", game_ids, "/box_score")
-    #
-    # new_ids <- c()
-    # message("Compiling Game IDs")
-    # pb = txtProgressBar(min = 0, max = length(url2), initial = 0)
-    #
-    # # Have to iterate through every game for the given day and find all play by play ids on the box score page
-    # for (i in 1:length(url2)) {
-    #   file_dir <- paste0(base_path, "box_score/")
-    #   file_path <- paste0(file_dir, game_ids[i], ".html")
-    #   isUrlRead <- F
-    #
-    #   # Assumes that if pbp is available from file it will always be used rather than re-scraping
-    #   if (!is.na(base_path) & file.exists(file_path)) {
-    #     temp_html <- readLines(file_path, warn=F)
-    #   } else {
-    #     isUrlRead <- T
-    #     file_url <- url(url2[i], headers = c("User-Agent" = "My Custom User Agent"))
-    #     temp_html <- readLines(con = file_url, warn=F)
-    #     close(file_url)
-    #   }
-    #
-    #   # Give user option to save raw html file (to make future processing more efficient)
-    #   if (save_file & !is.na(base_path) & !file.exists(file_path)) {
-    #     dir.create(file_dir, recursive = T, showWarnings = F)
-    #     writeLines(temp_html, file_path)
-    #   }
-    #
-    #   new_id <- unlist(stringr::str_extract(temp_html, "(?<=play_by_play[/])\\d+"))
-    #   new_id <- unique(new_id[!is.na(new_id)])
-    #   new_ids <- c(new_ids,new_id)
-    #   if (isUrlRead) {
-    #     Sys.sleep(0.5)
-    #   }
-    #   setTxtProgressBar(pb,i)
-    # }
-    #
-    # close(pb)
-
-
     message("\nParsing Schedule")
     # Handle opponent and neutral games as both are broken up using an '@' character
     parsed <- lapply(df$Opponent, strsplit, "@")
@@ -1581,7 +1532,6 @@ get_team_schedule <-
     team_name <- bigballR::teamids$Team[which(bigballR::teamids$ID == team.id)]
 
     #This cleans the score information
-    # score <- strsplit(df$Result, " - ") old
     score <- strsplit(df$Result, "-")
     selected_score <-
       trimws(gsub("W", "", gsub("L", "", sapply(score, function(x) {
@@ -1601,11 +1551,6 @@ get_team_schedule <-
     detail <- ifelse(selected_score %in% c("Canceled", "Ppd"), selected_score, detail)
     selected_score <- ifelse(selected_score %in% c("Canceled", "Ppd"), NA, selected_score)
 
-    # pbp_ids <- selected_score
-    # pbp_ids[which(!is.na(pbp_ids))] <- if(length(new_ids)>0) new_ids else NA
-    # box_ids <- selected_score
-    # box_ids[which(!is.na(box_ids))] <- if(length(game_ids)>0) game_ids else NA
-
     #Put everything together into tidy data frame
     team_data <- data.frame(
       Date = df$Date,
@@ -1613,10 +1558,8 @@ get_team_schedule <-
       Home_Score = ifelse(!is.na(home_team), opponent_score, selected_score),
       Away = ifelse(!is.na(away_team), away_team, team_name),
       Away_Score = ifelse(!is.na(away_team), opponent_score, selected_score),
-      Contest_ID = game_ids,
-      # Box_ID = game_ids,
-      # Game_ID = pbp_ids,
-      # Box_ID = box_ids,
+      Box_ID = game_ids,
+      Game_ID = game_ids,
       isNeutral = is_neutral,
       Detail = detail,
       stringsAsFactors = F
@@ -1683,7 +1626,6 @@ get_team_roster <-
     }
 
     #Pull html for the team page
-    # url_text <- paste0("https://stats.ncaa.org/teams/", team.id, "/roster")
     url_text <- paste0("https://stats.ncaa.org/teams/", team.id)
     file_dir <- paste0(base_path, "team_schedule/")
     file_path <- paste0(file_dir, team.id, ".html")
@@ -3389,7 +3331,6 @@ scrape_box <-
 
     status <- "CLEAN"
 
-    # url_text <- paste0("https://stats.ncaa.org/contests/", game_id,"/box_score")
     url_text <- paste0("https://stats.ncaa.org/contests/", game_id,"/individual_stats")
     file_dir <- paste0(base_path, "box_score/")
     file_path <- paste0(file_dir, game_id, ".html")
@@ -3422,18 +3363,15 @@ scrape_box <-
     background <- table[[1]]
 
     away <- table[[4]]
-    # colnames(away) <- away[1,]
     away <- away[2:(nrow(away)-2),]
     away$Team <- gsub(" \\((.*)\\)", "", background[2,1])
 
     home <- table[[5]]
-    # colnames(home) <- home[1,]
     home <- home[2:(nrow(home)-2),]
     home$Team <- gsub(" \\((.*)\\)", "", background[3,1])
 
     box <- bind_rows(home, away)
 
-    # clean_name <- sapply(strsplit(box$Player, ","), function(x){trimws(paste(x[length(x)],x[1]))})
     clean_name <- box$Name
     format <- gsub("[^[:alnum:] ]", "", clean_name)
     format <- toupper(gsub("\\s+",".", format))
@@ -3445,11 +3383,12 @@ scrape_box <-
 
     box$CleanName <- clean_name
     box$Player <- player_name
-    box$Contest_ID <- game_id
+    box$Game_ID <- game_id
+    box$Box_ID <- game_id
 
     final <- box %>%
       rename("TPM" = "3FG", "TPA" = "3FGA", "FTM" = "FT", "ORB" = "ORebs", "DRB" = "DRebs", "TRB" = "TotReb", "Tech" = "TechFouls") %>%
-      select(Contest_ID, Team, Player, everything()) %>%
+      select(Box_ID, Team, Player, everything()) %>%
       filter(Player != "TEAM.TEAM")
 
     if(isUrlRead) {

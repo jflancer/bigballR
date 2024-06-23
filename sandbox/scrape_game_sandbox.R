@@ -3,6 +3,7 @@ game_id <- "3954945"
 
 # use this for new game
 game_id <- "5254137"
+game_id <- "3953847" # OT game
 save_file <- F
 use_file <- F
 base_path <- NA
@@ -72,7 +73,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     # Iterate through overtimes and add to game data frame
     numbOTs <- length(half_scores) - 4
     for (i in 1:numbOTs) {
-      ot_data <- table[[8 + i * 2]]  %>%
+      ot_data <- table[[5 + i]]  %>%
         dplyr::mutate_if(is.factor, as.character) %>%
         dplyr::mutate(Half_Status = 2 + i)
       game <- dplyr::bind_rows(game, ot_data)
