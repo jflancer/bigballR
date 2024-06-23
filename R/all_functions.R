@@ -1214,7 +1214,7 @@ get_date_games <-
     #pulls the necessary url
     url_text <-
       paste0(
-        "http://stats.ncaa.org/season_divisions/",
+        "https://stats.ncaa.org/season_divisions/",
         seasonid,
         "/scoreboards?game_date=",
         date2,
@@ -1288,7 +1288,7 @@ get_date_games <-
     # Need to read each box score page and find link to pbp page
 
     url2 <-
-      paste0("http://stats.ncaa.org/contests/", id_found, "/box_score")
+      paste0("https://stats.ncaa.org/contests/", id_found, "/box_score")
 
     # Clean team names
     home_name = gsub(" [(].*[)]","", home_team)
@@ -1329,7 +1329,7 @@ get_date_games <-
     if(length(id_found)>0){
       pb = txtProgressBar(min = 0, max = length(id_found), initial = 0)
       for (i in 1:length(id_found)) {
-        if(url2[i] !=  "http://stats.ncaa.org/contests/NA/box_score") {
+        if(url2[i] !=  "https://stats.ncaa.org/contests/NA/box_score") {
           file_dir <- paste0(base_path, "box_score/")
           file_path <- paste0(file_dir, id_found[i], ".html")
           isUrlRead <- F
