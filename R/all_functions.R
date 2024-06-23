@@ -1311,7 +1311,7 @@ get_date_games <-
       Home = home_name,
       Away = away_name,
       BoxID = id_found,
-      GameID = NA,
+      GameID = id_found,
       Home_Score = home_score,
       Away_Score = away_score,
       Attendance = attendance,
@@ -1325,44 +1325,7 @@ get_date_games <-
       row.names = NULL
     )
 
-    # Have to iterate through every game for the given day and find all play by play ids on the box score page
-    if(length(id_found)>0){
-      pb = txtProgressBar(min = 0, max = length(id_found), initial = 0)
-      for (i in 1:length(id_found)) {
-        if(url2[i] !=  "https://stats.ncaa.org/contests/NA/box_score") {
-          file_dir <- paste0(base_path, "box_score/")
-          file_path <- paste0(file_dir, id_found[i], ".html")
-          isUrlRead <- F
-
-          # Assumes that if pbp is available from file it will always be used rather than re-scraping
-          if (!is.na(base_path) & file.exists(file_path)) {
-            temp_html <- readLines(file_path, warn=F)
-          } else {
-            isUrlRead <- T
-            file_url <- url(url2[i], headers = c("User-Agent" = "My Custom User Agent"))
-            temp_html <- readLines(con = file_url, warn=F)
-            close(file_url)
-          }
-
-          # Give user option to save raw html file (to make future processing more efficient)
-          if (save_file & !is.na(base_path) & !file.exists(file_path)) {
-            dir.create(file_dir, recursive = T, showWarnings = F)
-            writeLines(temp_html, file_path)
-          }
-
-          new_id <- unlist(stringr::str_extract(temp_html, "(?<=play_by_play/)\\d+"))
-          new_id <- unique(new_id[!is.na(new_id)])
-          if (length(new_id) == 1) {
-            game_data$GameID[i] <- new_id
-          }
-          if(isUrlRead) {
-            Sys.sleep(0.5)
-          }
-          setTxtProgressBar(pb,i)
-        }
-      }
-      close(pb)
-    } else {
+    if(length(id_found)==0){
       message("No Game IDs Found")
     }
 
