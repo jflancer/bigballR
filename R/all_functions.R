@@ -1290,12 +1290,12 @@ get_date_games <-
     url2 <-
       paste0("https://stats.ncaa.org/contests/", id_found, "/box_score")
 
-    # Clean team names
-    home_name = gsub(" [(].*[)]","", home_team)
+    # Clean team names (remove records, like "Rutgers (1-0)")
+    home_name = gsub(" [(][0-9].*[)]","", home_team)
     home_wins = as.vector(stringr::str_extract_all(home_team, "(?<=[(])\\d+(?=-)", T))
     home_losses = as.vector(stringr::str_extract_all(home_team, "(?<=-)\\d+(?=[)])", T))
 
-    away_name = gsub(" [(].*[)]","", away_team)
+    away_name = gsub(" [(][0-9].*[)]","", away_team)
     away_wins = as.vector(stringr::str_extract_all(away_team, "(?<=[(])\\d+(?=-)", T))
     away_losses = as.vector(stringr::str_extract_all(away_team, "(?<=-)\\d+(?=[)])", T))
 
