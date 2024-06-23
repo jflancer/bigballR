@@ -54,6 +54,10 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
 
   base_url <- "https://stats.ncaa.org/game/play_by_play/"
   url_text <- paste0(base_url, game_id)
+
+  # new
+  base_url <- "https://stats.ncaa.org/contests/game_id/play_by_play/"
+  url_text <- glue::glue("https://stats.ncaa.org/contests/{game_id}/play_by_play/")
   file_dir <- paste0(base_path, "play_by_play/")
   file_path <- paste0(file_dir, game_id, ".html")
   isUrlRead <- F
@@ -83,13 +87,13 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
   }
 
   # Pull scores for each half
-  half_scores <- table[[1]]
+  half_scores <- table[[2]][1:2,]
 
   # Get the data frames for the regulation portion
-  first_half <- table[[6]] %>%
+  first_half <- table[[4]] %>%
     dplyr::mutate_if(is.factor, as.character) %>%
     dplyr::mutate(Half_Status = 1)
-  second_half <- table[[8]] %>%
+  second_half <- table[[5]] %>%
     dplyr::mutate_if(is.factor, as.character) %>%
     dplyr::mutate(Half_Status = 2)
   game <- dplyr::bind_rows(first_half, second_half)
@@ -101,7 +105,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     # Iterate through overtimes and add to game data frame
     numbOTs <- length(half_scores) - 4
     for (i in 1:numbOTs) {
-      ot_data <- table[[8 + i * 2]]  %>%
+      ot_data <- table[[5 + i]]  %>%
         dplyr::mutate_if(is.factor, as.character) %>%
         dplyr::mutate(Half_Status = 2 + i)
       game <- dplyr::bind_rows(game, ot_data)
@@ -115,9 +119,9 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
   # As V1 is older and uses less detail, we will format the data in accordance with V1
   format <-
     if (((first_half[1, 1] == "20:00:00") &
-        (first_half[1, 2] == "game start" |
-         first_half[1, 2] == "period start"|
-         first_half[1,2] == "jumpball startperiod")) |
+         (first_half[1, 2] == "game start" |
+          first_half[1, 2] == "period start"|
+          first_half[1,2] == "jumpball startperiod")) |
         any(grepl("commercial",game[,2]))) {
       "V2"
     } else{
@@ -128,10 +132,10 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
   game <- dplyr::filter(game, !is.na(Score))
 
   # Get the game metadata
-  meta <- table[[3]]
+  meta <- table[[2]]
 
   # Get Game Date- removing start time because I don't really see a use in play by play
-  datetime <- colnames(meta)[2]
+  datetime <- meta[3,1]
   date <- substr(datetime, 1, 10)
   date <- ifelse(is.null(date),"",date)
 
@@ -423,7 +427,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     ) %>%
     dplyr::summarise(End = any(Terminal %in% c("Two Point Jumper", "Three Point Jumper", "Free Throw",
                                                "Dunk", "Layup", "Hook", "Tip In", "Steal", "Defensive Rebound"
-                                               ))*1, .groups = "keep") %>%
+    ))*1, .groups = "keep") %>%
     dplyr::ungroup() %>%
     dplyr::mutate(Valid = dplyr::lag(End, default =0)) %>%
     dplyr::select(Poss_Num, Valid)
@@ -472,11 +476,11 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         Sub_Deviate = nrow(.)
       ) %>%
       bind_cols(as.data.frame(matrix(rep(NA, nrow(dirty_game)*10),
-                       ncol = 10,
-                       nrow = nrow(dirty_game))) %>%
+                                     ncol = 10,
+                                     nrow = nrow(dirty_game))) %>%
                   rename(Home.1 = V1, Home.2 = V2, Home.3 = V3, Home.4 = V4, Home.5 = V5,
                          Away.1 = V6, Away.2 = V7, Away.3 = V8, Away.4 = V9, Away.5 = V10
-                         )) %>%
+                  )) %>%
       dplyr::select(
         ID:Away,
         Half_Status,
@@ -516,7 +520,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     # Find errors when an odd number of substitutions occur together
     mins_errors <- dirty_game %>%
       dplyr::filter(Event_Type %in% c("Leaves Game", "Enters Game"),
-             Game_Seconds != 1200) %>%
+                    Game_Seconds != 1200) %>%
       dplyr::group_by(Game_Seconds) %>%
       dplyr::summarise(count = dplyr::n(), .groups = "keep") %>%
       dplyr::ungroup() %>%
@@ -554,7 +558,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
                       # Player_1 != "TEAM",
                       Time != "00:00",
                       (Time != "20:00" & Half_Status %in% 1:2) | (Time != "05:00" & Half_Status >2)
-                      )$Player_1
+        )$Player_1
       home_entering <-
         dplyr::filter(half_data,
                       Event_Team == Home,
@@ -562,7 +566,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
                       # Player_1 != "TEAM",
                       Time != "00:00",
                       (Time != "20:00" & Half_Status %in% 1:2) | (Time != "05:00" & Half_Status >2)
-                      )$Player_1
+        )$Player_1
       away_leaving <-
         dplyr::filter(half_data,
                       Event_Team == Away,
@@ -570,22 +574,22 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
                       # Player_1 != "TEAM",
                       Time != "00:00",
                       (Time != "20:00" & Half_Status %in% 1:2) | (Time != "05:00" & Half_Status >2)
-                      )$Player_1
+        )$Player_1
       away_entering <-
         dplyr::filter(half_data,
                       Event_Team == Away,
                       Event_Type == "Enters Game",
                       # Player_1 != "TEAM",
                       (Time != "20:00" & Half_Status %in% 1:2) | (Time != "05:00" & Half_Status >2)
-                      )$Player_1
+        )$Player_1
 
       # Find players explicitly defined as starting
       true_home_starters <- (half_data %>%
-        dplyr::filter(Home == Event_Team,
-               (Time == "20:00" & Half_Status %in% 1:2) | (Time == "05:00" & Half_Status >2),
-               Time != "00:00",
-               Event_Type == "Enters Game"
-               ))$Player_1
+                               dplyr::filter(Home == Event_Team,
+                                             (Time == "20:00" & Half_Status %in% 1:2) | (Time == "05:00" & Half_Status >2),
+                                             Time != "00:00",
+                                             Event_Type == "Enters Game"
+                               ))$Player_1
 
       # Figure out starters by finding players that have a "Leaves Game" entry before an "Enters Game" entry
       if (length(home_leaving) > 0) {
@@ -600,10 +604,10 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
 
       # Find players explicitly defined as beginning from bench
       true_home_nonstarters <- (half_data %>%
-                               dplyr::filter(Home == Event_Team,
-                                             (Time == "20:00" & Half_Status %in% 1:2) | (Time == "05:00" & Half_Status >2),
-                                             Event_Type == "Leaves Game"
-                               ))$Player_1
+                                  dplyr::filter(Home == Event_Team,
+                                                (Time == "20:00" & Half_Status %in% 1:2) | (Time == "05:00" & Half_Status >2),
+                                                Event_Type == "Leaves Game"
+                                  ))$Player_1
 
       # Ignore if a player subs on for themselves at the beginning of a half
       temp_swap <- true_home_starters
@@ -675,10 +679,10 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
           #   )
           # )
           all_starters[1:5]
-        # If 5, checks have successfully found 5 starters
+          # If 5, checks have successfully found 5 starters
         } else if(length(all_starters) == 5){
           all_starters[1:5]
-        # Handle case when less than 5 starters are found even after error checks
+          # Handle case when less than 5 starters are found even after error checks
         } else {
           # Just takes first n players that have recorded an event in the half
           # all_found <- unique(c(home_starters, play_before_sub, non_subs, error_catch))
@@ -718,8 +722,8 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         players <- if(i == 1){
           unique(prior_half$Player_1, fromLast = T)[1:numb.players]
         } else {
-             rev(unique(prior_half$Player_1, fromLast = T))[1:numb.players]
-          }
+          rev(unique(prior_half$Player_1, fromLast = T))[1:numb.players]
+        }
         home_starters[is.na(home_starters)] <- players
         message(paste("5 starters not found for half",i, "choosing",players, collapse = "/"))
       }
@@ -743,21 +747,21 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         }
       }
 
-    true_away_nonstarters <- (half_data %>%
-                                dplyr::filter(Away == Event_Team,
-                                              (Time == "20:00" & Half_Status %in% 1:2) | (Time == "05:00" & Half_Status >2),
-                                              Event_Type == "Leaves Game"
-                                ))$Player_1
+      true_away_nonstarters <- (half_data %>%
+                                  dplyr::filter(Away == Event_Team,
+                                                (Time == "20:00" & Half_Status %in% 1:2) | (Time == "05:00" & Half_Status >2),
+                                                Event_Type == "Leaves Game"
+                                  ))$Player_1
 
-    temp_swap <- true_away_starters
-    true_away_starters <- true_away_starters[which(!true_away_starters %in% true_away_nonstarters)]
-    true_away_nonstarters <- true_away_nonstarters[which(!true_away_nonstarters %in% temp_swap)]
+      temp_swap <- true_away_starters
+      true_away_starters <- true_away_starters[which(!true_away_starters %in% true_away_nonstarters)]
+      true_away_nonstarters <- true_away_nonstarters[which(!true_away_nonstarters %in% temp_swap)]
 
-    away_starters <- away_starters[which(!away_starters %in% true_away_nonstarters)]
-    true_away_starters <- true_away_starters[which(!true_away_starters %in% away_starters)]
-    away_starters <- c(away_starters, true_away_starters)
+      away_starters <- away_starters[which(!away_starters %in% true_away_nonstarters)]
+      true_away_starters <- true_away_starters[which(!true_away_starters %in% away_starters)]
+      away_starters <- c(away_starters, true_away_starters)
 
-    away_starters <- if (length(away_starters) < 5) {
+      away_starters <- if (length(away_starters) < 5) {
         away_split <-
           dplyr::filter(
             half_data,
@@ -829,7 +833,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
           }
         }
       } else {
-          away_starters[1:5]
+        away_starters[1:5]
       }
 
       if(any(is.na(away_starters))){
@@ -853,12 +857,12 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
       # Repeat process is done for home and away team
 
       home_mat <- matrix(
-          c(home_starters,home_starters,rep(NA_character_, nrow(half_data) * 5 - 5)),
-          nrow = nrow(half_data) + 1, ncol = 5, byrow = T)
+        c(home_starters,home_starters,rep(NA_character_, nrow(half_data) * 5 - 5)),
+        nrow = nrow(half_data) + 1, ncol = 5, byrow = T)
 
       away_mat <- matrix(
-          c(away_starters,away_starters,rep(NA_character_, nrow(half_data) * 5 - 5)),
-          nrow = nrow(half_data) + 1, ncol = 5, byrow = T)
+        c(away_starters,away_starters,rep(NA_character_, nrow(half_data) * 5 - 5)),
+        nrow = nrow(half_data) + 1, ncol = 5, byrow = T)
 
       # Vectors of substitutes are used and diminished as events happen to track who is subbed
       home_exit_players <- if(length(home_leaving)>0){home_leaving}else{"HOPEFULLY THIS IS NOBODY'S NAME"}
@@ -965,7 +969,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     #Adds these columns to a new play by play data frame
     mild_game <-
       dplyr::bind_cols(list(dirty_game, as.data.frame(home_player_matrix, row.names = F), as.data.frame(away_player_matrix, row.names = F))
-            )
+      )
 
     #Add the event length variable which can often be helpful
     home_starters <- unlist(mild_game[1,23:27])
@@ -1004,12 +1008,12 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         ),
         # Only call garbage time if <= 3 starters are in... note: Ben Falk / CTG uses 2
         Starter_Thresh = ((Home.1 %in% home_starters) + (Home.2 %in% home_starters) +
-          (Home.3 %in% home_starters) + (Home.4 %in% home_starters) + (Home.5 %in% home_starters) +
-          (Away.1 %in% away_starters) + (Away.2 %in% away_starters) + (Away.3 %in% away_starters) +
-          (Away.4 %in% away_starters) + (Away.5 %in% away_starters)) <= 3,
+                            (Home.3 %in% home_starters) + (Home.4 %in% home_starters) + (Home.5 %in% home_starters) +
+                            (Away.1 %in% away_starters) + (Away.2 %in% away_starters) + (Away.3 %in% away_starters) +
+                            (Away.4 %in% away_starters) + (Away.5 %in% away_starters)) <= 3,
         # If both thresholds are met we hit garbage time and stay in it
         isGarbageTime = cumsum(Garbage_Thresh*Starter_Thresh) >= 1
-        ) %>%
+      ) %>%
       dplyr::select(-Garbage_Thresh, -Starter_Thresh) %>%
       # Making fix so that the players on the court to start a possession are credited for the entire possession
       dplyr::group_by(Poss_Num) %>%
@@ -1286,12 +1290,12 @@ get_date_games <-
     url2 <-
       paste0("https://stats.ncaa.org/contests/", id_found, "/box_score")
 
-    # Clean team names (remove records, like "Rutgers (1-0)")
-    home_name = gsub(" [(][0-9].*[)]","", home_team)
+    # Clean team names
+    home_name = gsub(" [(].*[)]","", home_team)
     home_wins = as.vector(stringr::str_extract_all(home_team, "(?<=[(])\\d+(?=-)", T))
     home_losses = as.vector(stringr::str_extract_all(home_team, "(?<=-)\\d+(?=[)])", T))
 
-    away_name = gsub(" [(][0-9].*[)]","", away_team)
+    away_name = gsub(" [(].*[)]","", away_team)
     away_wins = as.vector(stringr::str_extract_all(away_team, "(?<=[(])\\d+(?=-)", T))
     away_losses = as.vector(stringr::str_extract_all(away_team, "(?<=-)\\d+(?=[)])", T))
 
@@ -1432,8 +1436,8 @@ get_team_schedule <-
     }
 
     tables <- XML::readHTMLTable(html)
-    if(!is.null(tables[[2]])) {
-      df <- data.frame(as.matrix(tables[[2]]), stringsAsFactors = F)
+    if(!is.null(tables[[1]])) {
+      df <- data.frame(as.matrix(tables[[1]]), stringsAsFactors = F)
     } else {
       message(paste(team.id, "has no schedule"))
       return(data.frame())
@@ -1443,59 +1447,40 @@ get_team_schedule <-
     df <- df[!is.na(df$Opponent),]
 
     # fix strings like "Campbell 2022-23 MBB App State MTE" and "UC Santa Barbara @Phoenix, AZ (2022-23 MBB Jerry Colangelo Classic)"
-    df$Opponent <- df$Opponent |>
-      str_remove(" 202.*$") |>
+    df$Opponent_with_detail <- df$Opponent |>
+      str_remove(" 202.*$")
+    # Keep two different versions: df$Opponent_with_detail includes neutral site descriptions,
+    # df$Opponent does not.
+    df$Opponent <- df$Opponent_with_detail |>
       str_remove(" \\@[A-Z].*$")
 
 
     game_ids <-
       unlist(stringr::str_extract_all(html, "(?<=contests/)\\d+(?=[/])"))
 
-    # Game IDs links to box score game id, not play by play id
-    # Unfortunately need to now parse webpage for each game played to find game id
-    url2 <-
-      paste0("https://stats.ncaa.org/contests/", game_ids, "/box_score")
-
-    new_ids <- c()
-    message("Compiling Game IDs")
-    pb = txtProgressBar(min = 0, max = length(url2), initial = 0)
-
-    # Have to iterate through every game for the given day and find all play by play ids on the box score page
-    for (i in 1:length(url2)) {
-      file_dir <- paste0(base_path, "box_score/")
-      file_path <- paste0(file_dir, game_ids[i], ".html")
-      isUrlRead <- F
-
-      # Assumes that if pbp is available from file it will always be used rather than re-scraping
-      if (!is.na(base_path) & file.exists(file_path)) {
-        temp_html <- readLines(file_path, warn=F)
-      } else {
-        isUrlRead <- T
-        file_url <- url(url2[i], headers = c("User-Agent" = "My Custom User Agent"))
-        temp_html <- readLines(con = file_url, warn=F)
-        close(file_url)
-      }
-
-      # Give user option to save raw html file (to make future processing more efficient)
-      if (save_file & !is.na(base_path) & !file.exists(file_path)) {
-        dir.create(file_dir, recursive = T, showWarnings = F)
-        writeLines(temp_html, file_path)
-      }
-
-      new_id <- unlist(stringr::str_extract(temp_html, "(?<=play_by_play[/])\\d+"))
-      new_id <- unique(new_id[!is.na(new_id)])
-      new_ids <- c(new_ids,new_id)
-      if (isUrlRead) {
-        Sys.sleep(0.5)
-      }
-      setTxtProgressBar(pb,i)
-    }
-
-    close(pb)
     message("\nParsing Schedule")
     # Handle opponent and neutral games as both are broken up using an '@' character
     parsed <- lapply(df$Opponent, strsplit, "@")
     parsed <- lapply(parsed, function(x) {
+      x <- unlist(x)
+      t <- stringr::str_extract(x, "(?<=[\\#[0-9]+] ).*")
+      t[is.na(t)] <- x[is.na(t)]
+      if(!any(trimws(t) %in% bigballR::teamids$Team)) {
+        for(j in 1:length(t)) {
+          i <- 1
+          while (!substr(t[j], 1, i) %in% bigballR::teamids$Team && i <= nchar(t[j])) {
+            i <- i + 1
+          }
+          t[j] = substr(t[j], 1, i)
+        }
+      }
+
+      return(t)
+    })
+
+    # Use df$Opponent_with_detail to get neutral site information
+    parsed_detail <- lapply(df$Opponent_with_detail, strsplit, "@")
+    parsed_detail <- lapply(parsed_detail, function(x) {
       x <- unlist(x)
       t <- stringr::str_extract(x, "(?<=[\\#[0-9]+] ).*")
       t[is.na(t)] <- x[is.na(t)]
@@ -1522,7 +1507,7 @@ get_team_schedule <-
 
     # Searches for neutral game and gets location
     Neutral <-
-      lapply(parsed, function(x) {
+      lapply(parsed_detail, function(x) {
         if (length(x) == 2 & x[1] != "")
           return(x[2])
 
@@ -1531,7 +1516,7 @@ get_team_schedule <-
     #Iterate through games and finds the home and away team
     home_team <- rep(NA, length(parsed))
     away_team <- rep(NA, length(parsed))
-    is_neutral <- rep(F, length(parsed))
+    is_neutral <- rep(F, length(parsed_detail))
     for (i in 1:length(parsed)) {
       if (!is.null(Home[[i]])) {
         home_team[i] <- trimws(Home[[i]])
@@ -1547,7 +1532,6 @@ get_team_schedule <-
     team_name <- bigballR::teamids$Team[which(bigballR::teamids$ID == team.id)]
 
     #This cleans the score information
-    # score <- strsplit(df$Result, " - ") old
     score <- strsplit(df$Result, "-")
     selected_score <-
       trimws(gsub("W", "", gsub("L", "", sapply(score, function(x) {
@@ -1567,11 +1551,6 @@ get_team_schedule <-
     detail <- ifelse(selected_score %in% c("Canceled", "Ppd"), selected_score, detail)
     selected_score <- ifelse(selected_score %in% c("Canceled", "Ppd"), NA, selected_score)
 
-    pbp_ids <- selected_score
-    pbp_ids[which(!is.na(pbp_ids))] <- if(length(new_ids)>0) new_ids else NA
-    box_ids <- selected_score
-    box_ids[which(!is.na(box_ids))] <- if(length(game_ids)>0) game_ids else NA
-
     #Put everything together into tidy data frame
     team_data <- data.frame(
       Date = df$Date,
@@ -1579,8 +1558,8 @@ get_team_schedule <-
       Home_Score = ifelse(!is.na(home_team), opponent_score, selected_score),
       Away = ifelse(!is.na(away_team), away_team, team_name),
       Away_Score = ifelse(!is.na(away_team), opponent_score, selected_score),
-      Game_ID = pbp_ids,
-      Box_ID = box_ids,
+      Box_ID = game_ids,
+      Game_ID = game_ids,
       isNeutral = is_neutral,
       Detail = detail,
       stringsAsFactors = F
@@ -1591,11 +1570,11 @@ get_team_schedule <-
     #Give user final status update and returns the df
     message(paste0(
       team_name[1],
-      " complete--",
+      " complete -- ",
       nrow(team_data),
       "/",
       length(game_ids),
-      " | games/ids found"
+      " games/ids found"
     ))
 
     return(team_data)
@@ -1674,6 +1653,9 @@ get_team_roster <-
     roster_link <-
       stringr::str_extract_all(roster_link, "(?<=\\\")(.*)(?=[\\\"])")
     roster_url <- paste0("https://stats.ncaa.org", roster_link)
+    roster_url <- paste0("https://stats.ncaa.org/teams/", team.id, "/roster")
+
+
     #Read html for the roster page and format it so it can be usabl
 
     file_dir <- paste0(base_path, "team_roster/")
@@ -1695,11 +1677,11 @@ get_team_roster <-
       close(file_url)
     }
 
-    table <- XML::readHTMLTable(html)[[1]][, 1:5] %>%
+    table <- XML::readHTMLTable(html)[[1]][, 1:9] %>%
       mutate(across(everything(), as.character))
     # Return the more usable roster page
-    player <- table$Player
-    clean_name <- sapply(strsplit(player, ","), function(x){trimws(paste(x[length(x)],x[1]))})
+    player <- table$Name
+    clean_name <- player
     format <- gsub("[^[:alnum:] ]", "", clean_name)
     format <- toupper(gsub("\\s+",".", format))
     player_name <- gsub("(\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV)$","", format)
@@ -1707,7 +1689,7 @@ get_team_roster <-
 
     table$Player <- player_name
     table$CleanName <- clean_name
-    table$HtInches <- unname(sapply(table$Ht, function(x){
+    table$HtInches <- unname(sapply(table$Height, function(x){
       a = as.numeric(strsplit(x,"-")[[1]])
       12*a[1] + a[2]
     }))
@@ -1715,8 +1697,8 @@ get_team_roster <-
     if (isUrlRead) {
       Sys.sleep(0.5)
     }
-  return(table)
-}
+    return(table)
+  }
 
 #' Multiple Game Play-By-Play Scraper
 #'
@@ -3349,7 +3331,7 @@ scrape_box <-
 
     status <- "CLEAN"
 
-    url_text <- paste0("https://stats.ncaa.org/contests/", game_id,"/box_score")
+    url_text <- paste0("https://stats.ncaa.org/contests/", game_id,"/individual_stats")
     file_dir <- paste0(base_path, "box_score/")
     file_path <- paste0(file_dir, game_id, ".html")
     isUrlRead <- F
@@ -3380,19 +3362,17 @@ scrape_box <-
 
     background <- table[[1]]
 
-    away <- table[[5]]
-    colnames(away) <- away[1,]
-    away <- away[2:(nrow(away)-1),]
-    away$Team <- gsub(" \\((.*)\\)", "", background[1,1])
+    away <- table[[4]]
+    away <- away[2:(nrow(away)-2),]
+    away$Team <- gsub(" \\((.*)\\)", "", background[2,1])
 
-    home <- table[[6]]
-    colnames(home) <- home[1,]
-    home <- home[2:(nrow(home)-1),]
-    home$Team <- gsub(" \\((.*)\\)", "", background[2,1])
+    home <- table[[5]]
+    home <- home[2:(nrow(home)-2),]
+    home$Team <- gsub(" \\((.*)\\)", "", background[3,1])
 
     box <- bind_rows(home, away)
 
-    clean_name <- sapply(strsplit(box$Player, ","), function(x){trimws(paste(x[length(x)],x[1]))})
+    clean_name <- box$Name
     format <- gsub("[^[:alnum:] ]", "", clean_name)
     format <- toupper(gsub("\\s+",".", format))
     player_name <- gsub("(\\.JR\\.|\\.SR\\.|\\.J\\.R\\.|\\.JR\\.|JR\\.|SR\\.|\\.SR|\\.JR|\\.SR|\\.III|\\.II|\\.IV)$","", format)
@@ -3404,19 +3384,20 @@ scrape_box <-
     box$CleanName <- clean_name
     box$Player <- player_name
     box$Game_ID <- game_id
+    box$Box_ID <- game_id
 
     final <- box %>%
-      rename("TPM" = "3FG", "TPA" = "3FGA", "FTM" = "FT", "ORB" = "ORebs", "DRB" = "DRebs", "TRB" = "Tot Reb", "Tech" = "Tech Fouls") %>%
-      select(Game_ID, Team, Player, everything()) %>%
+      rename("TPM" = "3FG", "TPA" = "3FGA", "FTM" = "FT", "ORB" = "ORebs", "DRB" = "DRebs", "TRB" = "TotReb", "Tech" = "TechFouls") %>%
+      select(Box_ID, Team, Player, everything()) %>%
       filter(Player != "TEAM.TEAM")
 
     if(isUrlRead) {
       Sys.sleep(2)
     }
 
-    message(paste(background[2,1], "v", background[1,1], "|", game_id))
+    message(paste(background[3,1], "v", background[2,1], "|", game_id))
     return(final)
-}
+  }
 
 #' Box Scores Scrape
 #'
