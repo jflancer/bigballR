@@ -1,6 +1,6 @@
 *.Rhistory
 *.Ruserdata
 *.Rbuildignore
-.Rproj.user/
+.Rproj.user/*
 .Rproj.user
 Icon
