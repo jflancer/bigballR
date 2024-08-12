@@ -1514,6 +1514,10 @@ get_team_schedule <-
     detail <- ifelse(selected_score %in% c("Canceled", "Ppd"), selected_score, detail)
     selected_score <- ifelse(selected_score %in% c("Canceled", "Ppd"), NA, selected_score)
 
+    # add NA game_ids for cancelled games
+    new_game_ids <- rep(NA, nrow(df))
+    new_game_ids[is.na(detail) | detail != 'Canceled'] <- game_ids
+
     #Put everything together into tidy data frame
     team_data <- data.frame(
       Date = df$Date,
@@ -1521,8 +1525,8 @@ get_team_schedule <-
       Home_Score = ifelse(!is.na(home_team), opponent_score, selected_score),
       Away = ifelse(!is.na(away_team), away_team, team_name),
       Away_Score = ifelse(!is.na(away_team), opponent_score, selected_score),
-      Box_ID = game_ids,
-      Game_ID = game_ids,
+      Box_ID = new_game_ids,
+      Game_ID = new_game_ids,
       isNeutral = is_neutral,
       Detail = detail,
       stringsAsFactors = F
