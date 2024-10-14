@@ -1109,6 +1109,9 @@ get_date_games <-
     # Find the season id needed by the url given the date of the game
     # The pbp only goes back to 2011 in most cases, so no need to pull deeper
     seasonid <- dplyr::case_when(
+      # 24-25
+      dateform > as.Date("2024-05-01") &
+        dateform <= as.Date("2025-05-01") ~ 18403,
       # 23-24
       dateform > as.Date("2023-05-01") &
         dateform <= as.Date("2024-05-01") ~ 18221,
@@ -3332,10 +3335,13 @@ scrape_box <-
     away <- table[[4]]
     away <- away[2:(nrow(away)-2),]
     away$Team <- gsub(" \\((.*)\\)", "", background[2,1])
+    away <- away[,names(away) != 'Avg']
 
     home <- table[[5]]
     home <- home[2:(nrow(home)-2),]
     home$Team <- gsub(" \\((.*)\\)", "", background[3,1])
+    home <- home[,names(home) != 'Avg']
+
 
     box <- bind_rows(home, away)
 
