@@ -28,9 +28,9 @@ data frame with each row representing a player on the roster
 \itemize{
 \item{Jersey} - Player jersey number
 \item{Player} - Name of Player
-\item{Pos} - Position (one of G,F,C) as designated by the NCAA
-\item{Ht} - Height as reported by the NCAA
-\item{Yr} - School year, as Fr, So, Jr, Sr
+\item{Position} - Position (one of G,F,C) as designated by the NCAA
+\item{Height} - Height as reported by the NCAA
+\item{Class} - School year, as Fr, So, Jr, Sr
 }
 }
 \description{

@@ -1567,9 +1567,9 @@ get_team_schedule <-
 #' \itemize{
 #' \item{Jersey} - Player jersey number
 #' \item{Player} - Name of Player
-#' \item{Pos} - Position (one of G,F,C) as designated by the NCAA
-#' \item{Ht} - Height as reported by the NCAA
-#' \item{Yr} - School year, as Fr, So, Jr, Sr
+#' \item{Position} - Position (one of G,F,C) as designated by the NCAA
+#' \item{Height} - Height as reported by the NCAA
+#' \item{Class} - School year, as Fr, So, Jr, Sr
 #' }
 #' @export
 #' @examples
@@ -1647,7 +1647,7 @@ get_team_roster <-
       close(file_url)
     }
 
-    table <- XML::readHTMLTable(html)[[1]][, 1:9] %>%
+    table <- XML::readHTMLTable(html)[[1]][, 1:7] %>%
       mutate(across(everything(), as.character))
     # Return the more usable roster page
     player <- table$Name
@@ -1663,6 +1663,9 @@ get_team_roster <-
       a = as.numeric(strsplit(x,"-")[[1]])
       12*a[1] + a[2]
     }))
+    names(table)[names(table) == "GP"] <- "GamesPlayed"
+    names(table)[names(table) == "GS"] <- "GamesStarted"
+    names(table)[names(table) == "#"] <- "Jersey"
 
     if (isUrlRead) {
       Sys.sleep(0.5)
