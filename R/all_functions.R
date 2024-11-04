@@ -1519,7 +1519,9 @@ get_team_schedule <-
 
     # add NA game_ids for cancelled games
     new_game_ids <- rep(NA, nrow(df))
-    new_game_ids[is.na(detail) | detail != 'Canceled'] <- game_ids
+    if (length(game_ids) > 0) {
+      new_game_ids[is.na(detail) | detail != 'Canceled'][1:length(game_ids)] <- game_ids
+    }
 
     #Put everything together into tidy data frame
     team_data <- data.frame(
