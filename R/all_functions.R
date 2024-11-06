@@ -3335,12 +3335,22 @@ scrape_box <-
     background <- table[[1]]
 
     away <- table[[4]]
-    away <- away[2:(nrow(away)-2),]
+    home <- table[[5]]
+
+
+    away_end <- which(away[['Name']] == 'TEAM') - 1
+    if (length(away_end) != 1) {
+      away_end <- nrow(away) - 2
+    }
+    away <- away[1:away_end,]
     away$Team <- gsub(" \\((.*)\\)", "", background[2,1])
     away <- away[,names(away) != 'Avg']
 
-    home <- table[[5]]
-    home <- home[2:(nrow(home)-2),]
+    home_end <- which(home[['Name']] == 'TEAM') - 1
+    if (length(home_end) != 1) {
+      home_end <- nrow(home) - 2
+    }
+    home <- home[1:home_end,]
     home$Team <- gsub(" \\((.*)\\)", "", background[3,1])
     home <- home[,names(home) != 'Avg']
 
