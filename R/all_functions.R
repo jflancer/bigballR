@@ -1538,6 +1538,7 @@ get_team_schedule <-
       Game_ID = new_game_ids,
       isNeutral = is_neutral,
       Detail = detail,
+      Attendance = as.numeric(gsub(",", "", df$Attendance)),
       stringsAsFactors = F
     )
     #Replace blank portions of schedule with dashes, as that is used on NCAA site but NA is better for this purpose
