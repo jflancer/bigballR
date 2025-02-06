@@ -1109,6 +1109,9 @@ get_date_games <-
     # Find the season id needed by the url given the date of the game
     # The pbp only goes back to 2011 in most cases, so no need to pull deeper
     seasonid <- dplyr::case_when(
+      # 24-25
+      dateform > as.Date("2024-05-01") &
+        dateform <= as.Date("2025-05-01") ~ 18403,
       # 23-24
       dateform > as.Date("2023-05-01") &
         dateform <= as.Date("2024-05-01") ~ 18221,
@@ -1291,11 +1294,15 @@ get_date_games <-
       paste0("https://stats.ncaa.org/contests/", id_found, "/box_score")
 
     # Clean team names (remove records, like "Rutgers (1-0)")
-    home_name = gsub(" [(].*[)]","", home_team)
+    # home_name = gsub(" [(][0-9]{1-2}\\-[0-9]{1-2}[)]","", home_team)
+    home_name = gsub(" \\([0-9].+","", home_team) |>
+      gsub(pattern = '\\#[0-9]{1,2} ', replacement = "")
     home_wins = as.vector(stringr::str_extract_all(home_team, "(?<=[(])\\d+(?=-)", T))
     home_losses = as.vector(stringr::str_extract_all(home_team, "(?<=-)\\d+(?=[)])", T))
 
-    away_name = gsub(" [(].*[)]","", away_team)
+    # away_name = gsub(" [(][0-9]{1-2}\\-[0-9]{1-2}[)]","", away_team)
+    away_name = gsub(" \\([0-9].+","", away_team) |>
+      gsub(pattern = '\\#[0-9]{1,2} ', replacement = "")
     away_wins = as.vector(stringr::str_extract_all(away_team, "(?<=[(])\\d+(?=-)", T))
     away_losses = as.vector(stringr::str_extract_all(away_team, "(?<=-)\\d+(?=[)])", T))
 
@@ -1516,7 +1523,9 @@ get_team_schedule <-
 
     # add NA game_ids for cancelled games
     new_game_ids <- rep(NA, nrow(df))
-    new_game_ids[is.na(detail) | detail != 'Canceled'] <- game_ids
+    if (length(game_ids) > 0) {
+      new_game_ids[is.na(detail) | detail != 'Canceled'][1:length(game_ids)] <- game_ids
+    }
 
     #Put everything together into tidy data frame
     team_data <- data.frame(
@@ -1529,6 +1538,7 @@ get_team_schedule <-
       Game_ID = new_game_ids,
       isNeutral = is_neutral,
       Detail = detail,
+      Attendance = as.numeric(gsub(",", "", df$Attendance)),
       stringsAsFactors = F
     )
     #Replace blank portions of schedule with dashes, as that is used on NCAA site but NA is better for this purpose
@@ -3330,12 +3340,25 @@ scrape_box <-
     background <- table[[1]]
 
     away <- table[[4]]
-    away <- away[2:(nrow(away)-2),]
-    away$Team <- gsub(" \\((.*)\\)", "", background[2,1])
-
     home <- table[[5]]
-    home <- home[2:(nrow(home)-2),]
+
+
+    away_end <- which(away[['Name']] == 'TEAM') - 1
+    if (length(away_end) != 1) {
+      away_end <- nrow(away) - 2
+    }
+    away <- away[1:away_end,]
+    away$Team <- gsub(" \\((.*)\\)", "", background[2,1])
+    away <- away[,names(away) != 'Avg']
+
+    home_end <- which(home[['Name']] == 'TEAM') - 1
+    if (length(home_end) != 1) {
+      home_end <- nrow(home) - 2
+    }
+    home <- home[1:home_end,]
     home$Team <- gsub(" \\((.*)\\)", "", background[3,1])
+    home <- home[,names(home) != 'Avg']
+
 
     box <- bind_rows(home, away)
 
