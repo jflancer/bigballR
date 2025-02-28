@@ -3028,18 +3028,22 @@ convert_events <- function(events) {
     grepl("freethrow", events) &
       grepl("missed", events) ~ "missed Free Throw",
     grepl("timeout", events) ~ "Timeout",
-    grepl("block", events) ~ "Blocked Shot",
-    grepl("rebound offensive", events) ~ "Offensive Rebound",
     grepl("dunk", events) & grepl("made", events) ~ "made Dunk",
     grepl("dunk", events) & grepl("missed", events) ~ "missed Dunk",
-    grepl("rebound ", events) ~ "Deadball Rebound",
-    grepl(" jumpball won", events) ~ "won Jumpball",
-    grepl(" jumpball lost", events) ~ "lost Jumpball",
-    grepl(" jumpball heldball", events) ~ "held Jumpball",
     grepl("alleyoop", events) & grepl("made", events) ~ "made Dunk",
     grepl("alleyoop", events) &
       grepl("missed", events) ~ "missed Dunk",
+    grepl("block", events) ~ "Blocked Shot",
+    grepl("rebound offensive", events) ~ "Offensive Rebound",
+    grepl("rebound ", events) ~ "Deadball Rebound",
+    grepl(" jumpball won", events) ~ "won Jumpball",
+    grepl(" jumpball lost", events) ~ "lost Jumpball",
+    grepl(" jumpball heldball", events) ~ "Jumpball (held ball)",
+    grepl(" jumpball outofbounds", events) ~ "Jumpball (out of bounds)",
+    grepl(" jumpball lodgedball", events) ~ "Jumpball (lodged ball)",
+    grepl("Team, foul", events) ~ "Team Foul",
     grepl("turnover", events) ~ "Turnover",
+    grepl("wrongbasket", events) ~ "Wrong Basket (2pt Opp. Team)",
     is.na(events) ~ NA_character_,
     #if this comes up, I have not discovered the event and need to classify and convert it
     TRUE ~ "ERROR CHECK THE EVENT"
