@@ -78,5 +78,3 @@ get_shot_locations <- function(gameids) {
   
   return(shot_locations)
 }
-
-shots = get_shot_locations(schedule25$Game_ID)
