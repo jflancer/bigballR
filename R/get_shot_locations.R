@@ -10,6 +10,9 @@ get_shot_locations <- function(gameids) {
     
     shot_text <- unlist(regmatches(shots, matches))
     shot_text <- gsub(", Jr.", " Jr.", shot_text)
+    shot_text <- gsub(", III", " III", shot_text)
+    shot_text <- gsub(", IV", " IV", shot_text)
+
     shots_df <- do.call(rbind.data.frame, strsplit(shot_text, ", ", fixed = TRUE))
     
     colnames(shots_df) <- c("raw_x", "raw_y", "shooting_org", "made", "play_id", "play_description", "classes", "show_highlight")
