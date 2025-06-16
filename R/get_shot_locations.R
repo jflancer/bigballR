@@ -3,7 +3,7 @@ get_shot_locations <- function(gameids) {
   process_game <- function(i) {
     url <- paste0("https://stats.ncaa.org/contests/", i, "/box_score")
     html <- rvest::read_html(url)
-    Sys.Sleep(2)
+    Sys.sleep(2)
     shot_data <- html %>% rvest::html_nodes('.p-4  script')
     raw_data <- shot_data[2] %>% rvest::html_text(trim = TRUE)
     shots <- unlist(strsplit(raw_data, "\n", fixed = TRUE))
