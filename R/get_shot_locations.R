@@ -1,3 +1,4 @@
+## Shot Location Function (get_shot_locations)
 get_shot_locations <- function(gameids) {
   
   process_game <- function(i) {
@@ -82,4 +83,49 @@ get_shot_locations <- function(gameids) {
     dplyr::select(-c(bx,by,Side))
   
   return(shot_locations)
+}
+
+## PBP + Shot Location Helper function (join_pbp_shots)
+join_pbp_shots = function(pbp_data, shot_data) {
+  pbp_ids = sort(unique(pbp_data$ID))
+  shot_ids = sort(unique(shot_data$ID))
+  
+  if (!identical(pbp_ids, shot_ids)) {
+    stop("PBP and Shot Locations do not match.")
+  }
+  
+  pbp_data = pbp_data %>%
+    dplyr::group_by(ID) %>%
+    dplyr::mutate(row = row_number()) %>%
+    dplyr::ungroup()
+  
+  shot_att = pbp_data %>% 
+    dplyr::filter(Shot_Value %in% c(2, 3))
+  
+  no_shot_att = pbp_data %>% 
+    dplyr::filter(is.na(Shot_Value) | Shot_Value == 1)
+  
+  shot_att = shot_att %>%
+    dplyr::group_by(ID, Game_Seconds, Event_Result) %>%
+    dplyr::mutate(shot_no = row_number()) %>%
+    dplyr::ungroup()
+  
+  shot_data = shot_data %>%
+    dplyr::group_by(ID, Game_Seconds, Shot_Result) %>%
+    dplyr::mutate(shot_no = row_number()) %>%
+    dplyr::ungroup() %>%
+    dplyr::select(ID, Game_Seconds, Shot_Result, shot_no, Team, Player, x, y)
+  
+  shot_att_joined = shot_att %>%
+    dplyr::left_join(
+      shot_data,
+      by = join_by(ID, Game_Seconds, Event_Result == Shot_Result, shot_no))
+  
+  combined = dplyr::bind_rows(shot_att_joined, no_shot_att) %>%
+    dplyr::group_by(ID) %>%
+    dplyr::arrange(row, .by_group = TRUE) %>%
+    dplyr::ungroup() %>%
+    dplyr::select(-row, -shot_no)
+  
+  return(combined)
 }
