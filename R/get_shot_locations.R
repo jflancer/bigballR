@@ -38,15 +38,15 @@ get_shot_locations <- function(gameids) {
         minutes = as.numeric(stringr::str_extract(Time, "^\\d{2}")),
         seconds = as.numeric(stringr::str_extract(Time, "(?<=:)\\d{2}")),
         Shot_Result = dplyr::if_else(made == "true", "made", "missed"),
-        Game_Seconds = dplyr::if_else(
-          Half_Status == 1, (20 * 60 - (minutes * 60 + seconds)),
-          dplyr::if_else(
-            Half_Status == 2, (40 * 60 - (minutes * 60 + seconds)),
-            dplyr::if_else(
-              Half_Status == 3, (45 * 60 - (minutes * 60 + seconds)),
-              (50 * 60 - (minutes * 60 + seconds))
-            )
-          )
+        Game_Seconds = dplyr::case_when(
+          Half_Status == 1 ~ 20 * 60 - (minutes * 60 + seconds),
+          Half_Status == 2 ~ 40 * 60 - (minutes * 60 + seconds),
+          Half_Status == 3 ~ 45 * 60 - (minutes * 60 + seconds),
+          Half_Status == 4 ~ 50 * 60 - (minutes * 60 + seconds),
+          Half_Status == 5 ~ 55 * 60 - (minutes * 60 + seconds),
+          Half_Status == 6 ~ 60 * 60 - (minutes * 60 + seconds),
+          Half_Status == 7 ~ 65 * 60 - (minutes * 60 + seconds)
+          TRUE ~ 70 * 60 - (minutes * 60 + seconds)
         ),
         ID = i
       )
