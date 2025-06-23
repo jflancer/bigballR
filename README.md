@@ -1,7 +1,5 @@
 # bigballR
 
-###NOTE THIS DOCUMENTATION IS SLIGHTLY OUTDATED FOLLOWING THE LATEST PACKAGE UPDATE 1/13
-
 `bigballR` is an R package for working with NCAA Basketball data. This 
 package primarily revolves around the use of schedule, roster, and play-by-play data via stats.ncaa.com, and
 additionally has features to calculate lineups, on/off results, and player game and multi-game statistics.
@@ -21,13 +19,15 @@ devtools::install_github("jflancer/bigballR")
 Manually, game ids can be found in the url when browsing games, for example:
 ```4674164``` is the game id for ```https://stats.ncaa.org/game/play_by_play/4674164```
 
-- `get_date_games` data frame with game info and game ids for a given date.
-- `get_team_schedule` data frame with game info and ids for a given team.
-- `get_team_roster` data frame with player roster information for a given team. 
+- `get_date_games()` data frame with game info and game ids for a given date.
+- `get_team_schedule()` data frame with game info and ids for a given team.
+- `get_team_roster()` data frame with player roster information for a given team. 
 
 **Game Scraping Functions**
-- `scrape_game` the base function, given a game id will return a cleaned play by play file.
-- `get_play_by_play` builds off of scrape_game, allows for compiling from multiple game ids formatted in a vector.
+- `scrape_game()` the base function, given a game id will return a cleaned play by play file.
+- `get_play_by_play()` builds off of scrape_game, allows for compiling from multiple game ids formatted in a vector.
+- `get_box_scores()` pulls box scores from selected games.
+- NEW: `get_shot_locations()` pulls the shot locations and rim distance for every shot in a set of games.
 
 **Data Manipulation Functions**
 - `get_lineups` given play-by-play data retrieved from game scraping functions, will calculate a variety of stats for all lineups.
@@ -96,3 +96,13 @@ This function finds all lineups from a given lineup data source that include/exc
 This function calculates many player stats for either individual games or aggregate to get multi-game stats.
 * Takes all parameters described in get_lineups() function
 * multi.games | When false stats will be calculated on a game level. When true all games will be aggregated.
+
+### `get_shot_locations`
+This function gets a data frame of the shot location and rim distance for every shot
+* game_id | string made up of digits given to each unique game. This can be found in the play-by-play url for each game.
+
+### `join_pbp_shots`
+This function merges a data frame of the play by play from a game and the shot locations from a game
+* pbp_data | a data frame from get_play_by_play()
+* shot_data | a data frame from get_shot_locations()
+
