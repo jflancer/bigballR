@@ -3381,8 +3381,14 @@ scrape_box <-
     box$Game_ID <- game_id
     box$Box_ID <- game_id
 
+    box_col_names <- names(box)
+    col_rename_vec <- c('^3FG$' = 'TPM', '^3FGA$' = 'TPA', '^FT$' = 'FTM', '^ORebs$' = 'ORB', '^DRebs$' = 'DRB',
+                        '^TotReb$' = 'TRB', '^TechFouls$' = 'Tech')
+
+    new_box_col_names <- box_col_names |> stringr::str_replace_all(col_rename_vec)
+    names(box) <- new_box_col_names
+
     final <- box %>%
-      rename("TPM" = "3FG", "TPA" = "3FGA", "FTM" = "FT", "ORB" = "ORebs", "DRB" = "DRebs", "TRB" = "TotReb", "Tech" = "TechFouls") %>%
       select(Box_ID, Team, Player, everything()) %>%
       filter(Player != "TEAM.TEAM")
 
