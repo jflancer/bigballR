@@ -1155,6 +1155,33 @@ get_date_games <-
       #10-11
       dateform > as.Date("2010-05-01") &
         dateform <= as.Date("2011-05-01") ~ 10220,
+      #09-10
+      dateform > as.Date("2009-05-01") &
+        dateform <= as.Date("2010-05-01") ~ 10060,
+      # #08-09 # no box scores available starting here
+      # dateform > as.Date("2008-05-01") &
+      #   dateform <= as.Date("2009-05-01") ~ 13341,
+      # #07-08
+      # dateform > as.Date("2007-05-01") &
+      #   dateform <= as.Date("2008-05-01") ~ 13446,
+      # #06-07
+      # dateform > as.Date("2006-05-01") &
+      #   dateform <= as.Date("2007-05-01") ~ 13494,
+      # #05-06
+      # dateform > as.Date("2005-05-01") &
+      #   dateform <= as.Date("2006-05-01") ~ 13483,
+      # #04-05
+      # dateform > as.Date("2004-05-01") &
+      #   dateform <= as.Date("2005-05-01") ~ 13495,
+      # #03-04
+      # dateform > as.Date("2003-05-01") &
+      #   dateform <= as.Date("2004-05-01") ~ 13406,
+      # #02-03
+      # dateform > as.Date("2002-05-01") &
+      #   dateform <= as.Date("2003-05-01") ~ 13402,
+      # #01-02
+      # dateform > as.Date("2001-05-01") &
+      #   dateform <= as.Date("2002-05-01") ~ 13394,
       T ~ 0
     )
     if (seasonid == 0) {
@@ -3383,7 +3410,8 @@ scrape_box <-
 
     box_col_names <- names(box)
     col_rename_vec <- c('^3FG$' = 'TPM', '^3FGA$' = 'TPA', '^FT$' = 'FTM', '^ORebs$' = 'ORB', '^DRebs$' = 'DRB',
-                        '^TotReb$' = 'TRB', '^TechFouls$' = 'Tech', '^OffReb$' = 'ORB', '^DefReb$' = 'DRB')
+                        '^TotReb$' = 'TRB', '^TechFouls$' = 'Tech', '^OffReb$' = 'ORB', '^DefReb$' = 'DRB',
+                        '^Min$' = 'MP')
 
     new_box_col_names <- box_col_names |> stringr::str_replace_all(col_rename_vec)
     names(box) <- new_box_col_names
