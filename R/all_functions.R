@@ -3383,7 +3383,7 @@ scrape_box <-
 
     box_col_names <- names(box)
     col_rename_vec <- c('^3FG$' = 'TPM', '^3FGA$' = 'TPA', '^FT$' = 'FTM', '^ORebs$' = 'ORB', '^DRebs$' = 'DRB',
-                        '^TotReb$' = 'TRB', '^TechFouls$' = 'Tech')
+                        '^TotReb$' = 'TRB', '^TechFouls$' = 'Tech', '^OffReb$' = 'ORB', '^DefReb$' = 'DRB')
 
     new_box_col_names <- box_col_names |> stringr::str_replace_all(col_rename_vec)
     names(box) <- new_box_col_names
