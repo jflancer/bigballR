@@ -65,7 +65,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
   # Give user option to save raw html file (to make future processing more efficient)
   if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
     isUrlRead <- T
-    file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+    file_url <- url(url_text)
     html <- readLines(con = file_url, warn=F)
     close(file_url)
     dir.create(file_dir, recursive = T, showWarnings = F)
@@ -74,7 +74,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     html <- readLines(file_path, warn=F)
   } else {
     isUrlRead <- T
-    file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+    file_url <- url(url_text)
     html <- readLines(con = file_url, warn=F)
     close(file_url)
   }
@@ -1258,7 +1258,7 @@ get_date_games <-
 
     # Give user option to save raw html file (to make future processing more efficient)
     if (save_file & !is.na(base_path)) {
-      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(url_text)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
 
@@ -1270,7 +1270,7 @@ get_date_games <-
     if (use_file & !is.na(base_path)) {
       html <- readLines(file_path, warn=F)
     } else {
-      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(url_text)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
     }
@@ -1419,7 +1419,7 @@ get_team_schedule <-
 
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
       isUrlRead <- T
-      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(url_text)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
@@ -1428,7 +1428,7 @@ get_team_schedule <-
       html <- readLines(file_path, warn=F)
     } else {
       isUrlRead <- T
-      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(url_text)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
     }
@@ -1639,7 +1639,7 @@ get_team_roster <-
     # Give user option to save raw html file (to make future processing more efficient)
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
       isUrlRead <- T
-      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(url_text)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
@@ -1648,7 +1648,7 @@ get_team_roster <-
       html <- readLines(file_path, warn=F)
     } else {
       isUrlRead <- T
-      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(url_text)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
     }
@@ -1668,7 +1668,7 @@ get_team_roster <-
 
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
       isUrlRead <- T
-      file_url <- url(roster_url, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(roster_url)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
@@ -1677,7 +1677,7 @@ get_team_roster <-
       html <- readLines(file_path, warn=F)
     } else {
       isUrlRead <- T
-      file_url <- url(roster_url, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(roster_url)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
     }
@@ -3345,10 +3345,11 @@ scrape_box <-
     file_path <- paste0(file_dir, game_id, ".html")
     isUrlRead <- F
 
+
     # Give user option to save raw html file (to make future processing more efficient)
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
       isUrlRead <- T
-      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(url_text)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
@@ -3357,7 +3358,7 @@ scrape_box <-
       html <- readLines(file_path, warn=F)
     } else {
       isUrlRead <- T
-      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(url_text)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
     }
