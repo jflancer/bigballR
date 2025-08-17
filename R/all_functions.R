@@ -62,6 +62,7 @@ scrape_game <- function(game_id, session = NULL, save_file=F, use_file=F, base_p
   file_path <- paste0(file_dir, game_id, ".html")
   isUrlRead <- F
 
+
   # Give user option to save raw html file (to make future processing more efficient)
   if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
     isUrlRead <- T
@@ -154,7 +155,9 @@ scrape_game <- function(game_id, session = NULL, save_file=F, use_file=F, base_p
   # Convert game time to seconds- goes from 0 at start to 2400+ at end of game
   time_in_seconds <-
     unlist(lapply(strsplit(time, ":"), function(x) {
-      if (nchar(x[1]) == 2) {
+      if (str_detect(x[1], 'End')) {
+        0
+      } else if (nchar(x[1]) == 2) {
         (as.numeric(x[1]) * 60 + as.numeric(x[2]))
       } else{
         NA
@@ -164,6 +167,7 @@ scrape_game <- function(game_id, session = NULL, save_file=F, use_file=F, base_p
   game_time <- ifelse(game[, 5] < 2,
                       1200 + 1200 * (game[, 5] - 1),
                       2400 + 300 * (game[, 5] - 2)) - time_in_seconds
+  game_time[is.na(game_time)] <- 0
 
   # Differently formatted time that goes from 0 at game start to 40:00+ at end of game
   mins <- game_time %/% 60
@@ -294,7 +298,7 @@ scrape_game <- function(game_id, session = NULL, save_file=F, use_file=F, base_p
            first_word,
            NA_character_)
 
-  away_score <- as.numeric(away_score)
+  away_score <- suppressWarnings(as.numeric(away_score))
 
   # Now put together created variables into first data frame
   dirty_game <- data.frame(
@@ -375,6 +379,7 @@ scrape_game <- function(game_id, session = NULL, save_file=F, use_file=F, base_p
   # Calculating Possessions ####
   poss_num <- 0
   nrows <- 0
+
   for(i in 1:max(dirty_game$Half_Status)) {
     half_data <- dplyr::filter(dirty_game, Half_Status == i)
     poss_team <- dplyr::first(half_data$Event_Team[!half_data$Event_Type %in% c("Leaves Game", "Enters Game")])
@@ -412,9 +417,10 @@ scrape_game <- function(game_id, session = NULL, save_file=F, use_file=F, base_p
       and_one <- any(half_data$Event_Type[half_data$Game_Seconds == seconds] == "Free Throw") # Detect and-one to not switch possession on the made shot
       next_reb <-half_data$Event_Type[j+1] %in% c("Defensive Rebound", "Free Throw") # Catch final free throw misses -- note free throw sequences are occassionally out of order in pbp
 
+
       if(
-        type %in% c("Defensive Rebound", "Turnover") |
-        (type %in% c("Two Point Jumper", "Three Point Jumper", "Layup", "Dunk", "Tip In", "Hook") & result == "made" & !and_one) |
+        type %in% c("Defensive Rebound", "Turnover") ||
+        (type %in% c("Two Point Jumper", "Three Point Jumper", "Layup", "Dunk", "Tip In", "Hook") & result == "made" & !and_one) ||
         (type == "Free Throw" & result == "made" & !next_reb)
       ) {
 
@@ -1736,11 +1742,18 @@ get_play_by_play <- function(game_ids, use_file = F, save_file = F, base_path = 
 
   game_list <- lapply(game_ids, function(x) {
     # Add error handling so if one game throws an error it will report and continue iterating
-    tryCatch(scrape_game(x, session = session, use_file = use_file, save_file = save_file, base_path = base_path, overwrite=overwrite), error = function(e){
-      print(paste0("Error with game id: ", x, " // ", e))
-      return(NA)
+    g <- tryCatch(scrape_game(x, session = session, use_file = use_file, save_file = save_file, base_path = base_path, overwrite=overwrite), error = function(e){
+      return(NULL)
     })
+    if (is.null(g) || length(g) == 0) {
+      g <- tryCatch(scrape_game(x, session = session, use_file = use_file, save_file = save_file, base_path = base_path, overwrite=overwrite), error = function(e){
+        print(paste0("Error with game id: ", x, " // ", e))
+        return(NA)
+      })
+    }
+    g
   })
+
 
   if (!is.null(session)) {
     session$close()

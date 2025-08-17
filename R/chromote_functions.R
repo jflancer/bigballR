@@ -22,7 +22,7 @@ create_chromote_session <- function() {
 }
 
 #' @import rvest
-scrape_dynamic_tables <- function(url, session = NULL, pause_ms = 1000, return_as_html = TRUE) {
+scrape_dynamic_tables <- function(url, session = NULL, pause_ms = 2000, return_as_html = TRUE) {
   if (is.null(session)) {
     delete_session <- TRUE
 
@@ -32,26 +32,41 @@ scrape_dynamic_tables <- function(url, session = NULL, pause_ms = 1000, return_a
     delete_session <- FALSE
   }
 
-  session$Page$navigate(url)
+  get_rendered_html <- function(session, use_node_id = FALSE) {
+    # Prefer Runtime.evaluate to avoid nodeId altogether (see §3)
+    if (use_node_id == TRUE) {
+      doc_id   <- session$DOM$getDocument()$root$nodeId
+      html <- session$DOM$getOuterHTML(nodeId = doc_id)
+      html_txt <- session$DOM$getOuterHTML(nodeId = doc_id)$outerHTML
 
+    } else {
+      res <- session$Runtime$evaluate("document.documentElement.outerHTML")
+      html_txt <- res$result$value
+    }
+
+    html_txt
+  }
+
+  page_nav <- try(session$Page$navigate(url), silent = T)
   Sys.sleep(pause_ms / 1000)
+
+  if (class(page_nav)[1] == 'try-error') {
+    page_nav <- try(session$Page$navigate(url), silent = T)
+    Sys.sleep(2 * pause_ms / 1000)
+  }
 
   table_success <- FALSE
   retries <- 0
 
   while (!table_success && retries < 5) {
     session$Runtime$evaluate('new Promise(r => {
-    const sel = "table";                                // TODO: tighten this to the exact table selector
-    (function check(){ document.querySelector(sel) ? r(1) : setTimeout(check, 200); })();
-  })')
+      const sel = "table";                                // TODO: tighten this to the exact table selector
+      (function check(){ document.querySelector(sel) ? r(1) : setTimeout(check, 200); })();
+    })')
 
 
-    doc_id   <- session$DOM$getDocument()$root$nodeId
-    html <- session$DOM$getOuterHTML(nodeId = doc_id)
-    html_txt <- session$DOM$getOuterHTML(nodeId = doc_id)$outerHTML
-
+    html_txt <- get_rendered_html(session)
     page <- rvest::read_html(html_txt)
-
     tables <- page |> rvest::html_table()
 
     if (length(tables) > 0) {
