@@ -17,7 +17,7 @@ get_team_schedule(
 \arguments{
 \item{team.id}{The unique id given to each college/team for each season. This can be found in the url of the team page.}
 
-\item{season}{Season following format yyy1-y2, ex "2018=19"}
+\item{season}{Season following format yyy1-y2, ex "2018-19"}
 
 \item{team.name}{Alternative to using the id, you can get a team from data(teamids) with a season and team name specification.
 This inputs a team name, to be used along with season. This needs the school name not the complete team name, so "Duke" not "Duke Blue Devils".}

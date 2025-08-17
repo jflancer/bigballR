@@ -4,7 +4,14 @@
 \alias{scrape_box}
 \title{Box Score Scrape}
 \usage{
-scrape_box(game_id, use_file = F, save_file = F, base_path = NA, overwrite = F)
+scrape_box(
+  game_id,
+  session = NULL,
+  use_file = F,
+  save_file = F,
+  base_path = NA,
+  overwrite = F
+)
 }
 \arguments{
 \item{game_id}{box id for the game}
