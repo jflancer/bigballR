@@ -15,8 +15,4 @@ Game ID can be retrived from the schedule function}
 This function will return a dataframe with the box score information as well as
 additional rows for the team totals and opponent totals for both teams.
 }
-\examples{
-
-
-}
 \keyword{internal}

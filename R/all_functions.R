@@ -47,7 +47,7 @@
 #' }
 #' @examples
 #' scrape_game(4674164)
-scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwrite=F) {
+scrape_game <- function(game_id, session = NULL, save_file=F, use_file=F, base_path = NA, overwrite=F) {
 
   #track status of cleanliness of data for game
   status <- "CLEAN"
@@ -65,7 +65,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
   # Give user option to save raw html file (to make future processing more efficient)
   if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
     isUrlRead <- T
-    file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+    file_url <- url(url_text)
     html <- readLines(con = file_url, warn=F)
     close(file_url)
     dir.create(file_dir, recursive = T, showWarnings = F)
@@ -74,12 +74,16 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
     html <- readLines(file_path, warn=F)
   } else {
     isUrlRead <- T
-    file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
-    html <- readLines(con = file_url, warn=F)
-    close(file_url)
+
+    html <- scrape_dynamic_tables(url_text, session = session)
   }
 
-  table <- XML::readHTMLTable(html)
+  if (class(html)[1] == 'xml_document') {
+    table <- rvest::html_table(html, header = TRUE)
+    table <- table |> lapply(as.data.frame)
+  } else {
+    table <- XML::readHTMLTable(html)
+  }
 
   if (length(table) == 0) {
     message("Game Not Found")
@@ -183,7 +187,8 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
   player1_h <- game[, 4]
   player1_a <- game[, 2]
   player1 <- player1_h
-  player1[which(player1 == "" | is.na(player1))] <- player1_a[which(player1_a != "")]
+  player1[which(player1 == "" | is.na(player1))] <- player1_a[which(player1 == "" | is.na(player1))]
+
 
   events <- player1
   #Pulls the event team by looking at which entry side it comes from
@@ -289,6 +294,8 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
            first_word,
            NA_character_)
 
+  away_score <- as.numeric(away_score)
+
   # Now put together created variables into first data frame
   dirty_game <- data.frame(
     ID = game_id,
@@ -363,7 +370,7 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         Event_Type == "Tip In" ~ 2,
         Event_Type == "Hook" ~ 2
       )
-    )
+    ) |> suppressWarnings()
 
   # Calculating Possessions ####
   poss_num <- 0
@@ -1030,7 +1037,8 @@ scrape_game <- function(game_id, save_file=F, use_file=F, base_path = NA, overwr
         Away.4 = first(Away.4),
         Away.5 = first(Away.5)
       ) %>%
-      dplyr::ungroup()
+      dplyr::ungroup() |>
+      as.data.frame()
 
     # Final round of checking for data entry mistakes by scorekeeper
     # Look for if a player is said to do an event and they aren't on the court as determined above
@@ -1258,7 +1266,7 @@ get_date_games <-
 
     # Give user option to save raw html file (to make future processing more efficient)
     if (save_file & !is.na(base_path)) {
-      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(url_text)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
 
@@ -1270,7 +1278,7 @@ get_date_games <-
     if (use_file & !is.na(base_path)) {
       html <- readLines(file_path, warn=F)
     } else {
-      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(url_text)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
     }
@@ -1419,7 +1427,7 @@ get_team_schedule <-
 
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
       isUrlRead <- T
-      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(url_text)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
@@ -1428,7 +1436,7 @@ get_team_schedule <-
       html <- readLines(file_path, warn=F)
     } else {
       isUrlRead <- T
-      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(url_text)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
     }
@@ -1639,7 +1647,7 @@ get_team_roster <-
     # Give user option to save raw html file (to make future processing more efficient)
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
       isUrlRead <- T
-      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(url_text)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
@@ -1648,7 +1656,7 @@ get_team_roster <-
       html <- readLines(file_path, warn=F)
     } else {
       isUrlRead <- T
-      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(url_text)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
     }
@@ -1668,7 +1676,7 @@ get_team_roster <-
 
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
       isUrlRead <- T
-      file_url <- url(roster_url, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(roster_url)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
@@ -1677,7 +1685,7 @@ get_team_roster <-
       html <- readLines(file_path, warn=F)
     } else {
       isUrlRead <- T
-      file_url <- url(roster_url, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(roster_url)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
     }
@@ -1720,13 +1728,23 @@ get_play_by_play <- function(game_ids, use_file = F, save_file = F, base_path = 
   game_ids <- game_ids[!is.na(game_ids)]
   #Scrape all game ids into list
 
+  if (length(game_ids) > 1) {
+    session <- create_chromote_session()
+  } else {
+    session <- NULL
+  }
+
   game_list <- lapply(game_ids, function(x) {
     # Add error handling so if one game throws an error it will report and continue iterating
-    tryCatch(scrape_game(x, use_file = use_file, save_file = save_file, base_path = base_path, overwrite=overwrite), error = function(e){
+    tryCatch(scrape_game(x, session = session, use_file = use_file, save_file = save_file, base_path = base_path, overwrite=overwrite), error = function(e){
       print(paste0("Error with game id: ", x, " // ", e))
       return(NA)
     })
   })
+
+  if (!is.null(session)) {
+    session$close()
+  }
 
   dirty_ind <- which(is.na(game_list))
   #Remove any incorrect games found
@@ -3333,6 +3351,7 @@ plot_duos <- function(Lineup_Data = NA, team = NA, min_mins = 0, regressed_poss 
 #' scrape_box(1982642)
 scrape_box <-
   function(game_id,
+           session = NULL,
            use_file = F,
            save_file = F,
            base_path = NA,
@@ -3348,7 +3367,7 @@ scrape_box <-
     # Give user option to save raw html file (to make future processing more efficient)
     if (save_file & !is.na(base_path) & (!file.exists(file_path) | overwrite)) {
       isUrlRead <- T
-      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
+      file_url <- url(url_text)
       html <- readLines(con = file_url, warn=F)
       close(file_url)
       dir.create(file_dir, recursive = T, showWarnings = F)
@@ -3357,12 +3376,16 @@ scrape_box <-
       html <- readLines(file_path, warn=F)
     } else {
       isUrlRead <- T
-      file_url <- url(url_text, headers = c("User-Agent" = "My Custom User Agent"))
-      html <- readLines(con = file_url, warn=F)
-      close(file_url)
+
+      html <- scrape_dynamic_tables(url_text, session = session)
     }
 
-    table <- XML::readHTMLTable(html)
+    if (class(html)[1] == 'xml_document') {
+      table <- rvest::html_table(html)
+      table <- table |> lapply(as.data.frame)
+    } else {
+      table <- XML::readHTMLTable(html)
+    }
 
     if (length(table) == 0) {
       message("Game Not Found")
@@ -3380,7 +3403,7 @@ scrape_box <-
       away_end <- nrow(away) - 2
     }
     away <- away[1:away_end,]
-    away$Team <- gsub(" \\((.*)\\)", "", background[2,1])
+    away$Team <- gsub(" \\((.*)\\)", "", background[3,1])
     away <- away[,names(away) != 'Avg']
 
     home_end <- which(home[['Name']] == 'TEAM') - 1
@@ -3388,7 +3411,7 @@ scrape_box <-
       home_end <- nrow(home) - 2
     }
     home <- home[1:home_end,]
-    home$Team <- gsub(" \\((.*)\\)", "", background[3,1])
+    home$Team <- gsub(" \\((.*)\\)", "", background[4,1])
     home <- home[,names(home) != 'Avg']
 
 
@@ -3424,7 +3447,7 @@ scrape_box <-
       Sys.sleep(2)
     }
 
-    message(paste(background[3,1], "v", background[2,1], "|", game_id))
+    message(paste(background[4,1], "v", background[3,1], "|", game_id))
     return(final)
   }
 
@@ -3442,13 +3465,24 @@ get_box_scores <- function(game_ids, multi.games = F, use_file = F, save_file = 
   game_ids <- game_ids[!is.na(game_ids)]
   #Scrape all game ids into list
 
+  if (length(game_ids) > 1) {
+    session <- create_chromote_session()
+  } else {
+    session <- NULL
+  }
+
   game_list <- lapply(game_ids, function(x) {
     # Add error handling so if one game throws an error it will report and continue iterating
-    tryCatch(scrape_box(x, use_file = use_file, save_file = save_file, base_path = base_path, overwrite=overwrite), error = function(e){
+    tryCatch(scrape_box(x, session = session, use_file = use_file, save_file = save_file, base_path = base_path, overwrite=overwrite), error = function(e){
       print(paste0("Error with game id: ", x, " // ", e))
       return(NA)
     })
   })
+
+  if (!is.null(session)) {
+    session$close()
+  }
+
 
   dirty_ind <- which(is.na(game_list))
   #Remove any incorrect games found
@@ -3474,8 +3508,7 @@ get_box_scores <- function(game_ids, multi.games = F, use_file = F, save_file = 
       dplyr::across(where(is.numeric), function(x){x[is.nan(x)] <- 0; return(x)})
     ) %>%
     dplyr::select(
-      Game_ID:MP,
-      any_of(c("PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "FGA", "FGM", "FG.", "TPA", "TPM", "TP.", "FTA", "FTM", "FT.", "TS.", "eFG.", "Fouls", "DQ", "Tech", "CleanName"))
+      any_of(c('Game_ID',"Box_ID", "Player", "CleanName", "Team", "Pos", "MP", "G", "PTS", "ORB", "DRB", "TRB", "AST", "TO", "STL", "BLK", "FGA", "FGM", "FG.", "TPA", "TPM", "TP.", "FTA", "FTM", "FT.", "TS.", "eFG.", "Fouls", "DQ", "Tech", "CleanName"))
     )
 
   if (multi.games == T) {
@@ -3570,3 +3603,5 @@ get_possessions <- function(play_by_play_data = NA, simple = F) {
     return(possession_df)
   }
 }
+
+

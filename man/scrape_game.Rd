@@ -6,6 +6,7 @@
 \usage{
 scrape_game(
   game_id,
+  session = NULL,
   save_file = F,
   use_file = F,
   base_path = NA,
