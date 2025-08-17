@@ -80,7 +80,7 @@ scrape_game <- function(game_id, session = NULL, save_file=F, use_file=F, base_p
 
   if (class(html)[1] == 'xml_document') {
     table <- rvest::html_table(html, header = TRUE)
-    table <- table |> map(as.data.frame)
+    table <- table |> lapply(as.data.frame)
   } else {
     table <- XML::readHTMLTable(html)
   }
@@ -1037,7 +1037,8 @@ scrape_game <- function(game_id, session = NULL, save_file=F, use_file=F, base_p
         Away.4 = first(Away.4),
         Away.5 = first(Away.5)
       ) %>%
-      dplyr::ungroup()
+      dplyr::ungroup() |>
+      as.data.frame()
 
     # Final round of checking for data entry mistakes by scorekeeper
     # Look for if a player is said to do an event and they aren't on the court as determined above
@@ -3381,7 +3382,7 @@ scrape_box <-
 
     if (class(html)[1] == 'xml_document') {
       table <- rvest::html_table(html)
-      table <- table |> map(as.data.frame)
+      table <- table |> lapply(as.data.frame)
     } else {
       table <- XML::readHTMLTable(html)
     }

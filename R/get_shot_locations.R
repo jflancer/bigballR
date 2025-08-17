@@ -1,9 +1,10 @@
 ## Shot Location Function (get_shot_locations)
+#' @export
 get_shot_locations <- function(gameids) {
 
   process_game <- function(i) {
     url <- paste0("https://stats.ncaa.org/contests/", i, "/box_score")
-    html <- rvest::read_html(url)
+    html <- scrape_dynamic_tables(url)
     Sys.sleep(2)
     shot_data <- html %>% rvest::html_nodes('.p-4  script')
     raw_data <- shot_data[2] %>% rvest::html_text(trim = TRUE)
@@ -86,6 +87,7 @@ get_shot_locations <- function(gameids) {
 }
 
 ## PBP + Shot Location Helper function (join_pbp_shots)
+#' @export
 join_pbp_shots = function(pbp_data, shot_data) {
   pbp_ids = sort(unique(pbp_data$ID))
   shot_ids = sort(unique(shot_data$ID))

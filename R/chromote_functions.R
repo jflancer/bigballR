@@ -1,5 +1,4 @@
 #' @import chromote
-#' @export
 create_chromote_session <- function() {
   session <- chromote::ChromoteSession$new()
   session$Emulation$setUserAgentOverride(
@@ -23,7 +22,6 @@ create_chromote_session <- function() {
 }
 
 #' @import rvest
-#' @export
 scrape_dynamic_tables <- function(url, session = NULL, pause_ms = 1000, return_as_html = TRUE) {
   if (is.null(session)) {
     delete_session <- TRUE
