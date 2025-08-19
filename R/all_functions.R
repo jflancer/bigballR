@@ -1284,12 +1284,23 @@ get_date_games <-
     if (use_file & !is.na(base_path)) {
       html <- readLines(file_path, warn=F)
     } else {
-      file_url <- url(url_text)
-      html <- readLines(con = file_url, warn=F)
-      close(file_url)
+      # file_url <- url(url_text)
+      # html <- readLines(con = file_url, warn=F)
+      # close(file_url)
+
+
+      html <- scrape_dynamic_tables(url_text, session = NULL)
     }
 
-    table <- XML::readHTMLTable(html)
+    browser()
+
+    if (class(html)[1] == 'xml_document') {
+      table <- rvest::html_table(html, header = TRUE)
+      table <- table |> lapply(as.data.frame)
+    } else {
+      table <- XML::readHTMLTable(html)
+    }
+
     if(length(table) == 0) {
       stop("No Games Table Found")
     } else {
