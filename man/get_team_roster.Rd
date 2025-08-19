@@ -11,7 +11,8 @@ get_team_roster(
   use_file = F,
   save_file = F,
   base_path = NA,
-  overwrite = F
+  overwrite = F,
+  use_chromote = F
 )
 }
 \arguments{
@@ -22,6 +23,8 @@ String for the season stored as yyy1-y2 (2018-19 is current)}
 
 \item{team.name}{Alternative to using the id, you can get a team from data(teamids) with a season and team name specification.
 This inputs a team name, to be used along with season. This needs the school name not the complete team name, so "Duke" not "Duke Blue Devils".}
+
+\item{use_chromote}{Use headless browser to get rosters This is slower, but useful if you are getting errors about being forbidden to visit a link}
 }
 \value{
 data frame with each row representing a player on the roster

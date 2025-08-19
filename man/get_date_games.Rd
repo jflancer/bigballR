@@ -10,7 +10,8 @@ get_date_games(
   conference.ID = NA,
   use_file = F,
   save_file = F,
-  base_path = NA
+  base_path = NA,
+  use_chromote = F
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ get_date_games(
 \item{conference}{the common name used for a conference, not sensitive to case, spacing, punctuation, etc.}
 
 \item{conference.ID}{alternatively, if the conference ID is known it replace the conference name variable}
+
+\item{use_chromote}{Use headless browser to get schedules. This is slower, but useful if you are getting errors about being forbidden to visit a link}
 }
 \value{
 data frame with each row representing an inidividual game
