@@ -1092,6 +1092,7 @@ scrape_game <- function(game_id, session = NULL, save_file=F, use_file=F, base_p
 #' @param  date a character object containing a date in the format mm/dd/yyyy. Defaults is previous day (yesterday)
 #' @param conference the common name used for a conference, not sensitive to case, spacing, punctuation, etc.
 #' @param conference.ID alternatively, if the conference ID is known it replace the conference name variable
+#' @param use_chromote Use headless browser to get schedules. This is slower, but useful if you are getting errors about being forbidden to visit a link
 #' @importFrom XML readHTMLTable
 #' @import dplyr
 #' @import stringr
@@ -1117,7 +1118,8 @@ get_date_games <-
            conference.ID = NA,
            use_file = F,
            save_file = F,
-           base_path = NA) {
+           base_path = NA,
+           use_chromote = F) {
     #First convert the character date given by user into a date object
     dateform <- as.Date(as.character(date), format = "%m/%d/%Y")
 
@@ -1284,12 +1286,38 @@ get_date_games <-
     if (use_file & !is.na(base_path)) {
       html <- readLines(file_path, warn=F)
     } else {
-      file_url <- url(url_text)
-      html <- readLines(con = file_url, warn=F)
-      close(file_url)
+
+      if (use_chromote == TRUE) {
+        html <- scrape_dynamic_tables(url_text, session = NULL)
+      } else {
+        file_url <- url(url_text, headers = c("UserAgent" = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      "AppleWebKit/537.36 (KHTML, like Gecko)",
+      "Chrome/124.0.0.0 Safari/537.36'))
+        html <- tryCatch(
+          readLines(con = file_url, warn=F),
+          error = function(e) {
+            message("Error occurred: Access might be denied. Try setting the `use_chromote` argument to `TRUE`")  # send error message
+            return(NULL)                            # return NULL on error
+          }
+        )
+        if (is.null(html)) {
+          return(data.frame())
+        }
+        close(file_url)
+
+      }
+
+
     }
 
-    table <- XML::readHTMLTable(html)
+    if (class(html)[1] == 'xml_document') {
+      table <- rvest::html_table(html, header = TRUE)
+      table <- table |> lapply(as.data.frame)
+      html <- as.character(html)
+    } else {
+      table <- XML::readHTMLTable(html)
+    }
+
     if(length(table) == 0) {
       stop("No Games Table Found")
     } else {
@@ -1301,17 +1329,18 @@ get_date_games <-
     starting_rows <- (1:(nrow(table) / 5)) * 5 - 4
 
     # Pull game meta data from relevant part of the table
-    game_date <- as.character(table$V1[starting_rows])
-    attendance <- as.character(table$V7[starting_rows])
 
-    away_team <- as.character(table$V3[starting_rows])
-    home_team <- as.character(table$V2[starting_rows + 3])
+    game_date <- as.character(table[[1]][starting_rows])
+    attendance <- as.character(table[[7]][starting_rows])
 
-    home_score <- as.character(table$V3[starting_rows + 3])
-    away_score <- as.character(table$V5[starting_rows])
+    away_team <- as.character(table[[3]][starting_rows])
+    home_team <- as.character(table[[2]][starting_rows + 3])
+
+    home_score <- as.character(table[[3]][starting_rows + 3])
+    away_score <- as.character(table[[5]][starting_rows])
 
     # sees if a box score is available for each game
-    box_score_present <- as.character(table$V1[starting_rows + 4]) == "Box Score"
+    box_score_present <- as.character(table[[1]][starting_rows + 4]) == "Box Score"
 
     #This searches for all game IDs on the schedule page, using links found in the html
     game_ids <-
@@ -1323,7 +1352,7 @@ get_date_games <-
     id_found[!away_score %in% c("Canceled", "Ppd") & box_score_present] <- game_ids
 
     #Also creates variable used to find if a game was held at a neutral side
-    isNeutral <- table$V6[starting_rows] != ""
+    isNeutral <- table[[6]][starting_rows] != ""
 
     #Informs user of how many games and games with a relevant ID were found
     message(paste(date, "|", length(game_ids), "games found"))
@@ -1389,6 +1418,7 @@ get_date_games <-
 #' @param season Season following format yyy1-y2, ex "2018-19"
 #' @param team.name Alternative to using the id, you can get a team from data(teamids) with a season and team name specification.
 #' This inputs a team name, to be used along with season. This needs the school name not the complete team name, so "Duke" not "Duke Blue Devils".
+#' @param use_chromote Use headless browser to get schedules. This is slower, but useful if you are getting errors about being forbidden to visit a link
 #' @importFrom XML readHTMLTable
 #' @import dplyr
 #' @import stringr
@@ -1414,7 +1444,8 @@ get_team_schedule <-
            use_file = F,
            save_file = F,
            base_path = NA,
-           overwrite = F) {
+           overwrite = F,
+           use_chromote = F) {
 
     # If the user doesn't know id and instead gives a team name and season searches team DB for ID
     # This can only be done since 16-17 at the moment
@@ -1441,13 +1472,38 @@ get_team_schedule <-
     } else if (file.exists(file_path) & use_file) {
       html <- readLines(file_path, warn=F)
     } else {
+
       isUrlRead <- T
-      file_url <- url(url_text)
-      html <- readLines(con = file_url, warn=F)
-      close(file_url)
+      if (use_chromote == TRUE) {
+        html <- scrape_dynamic_tables(url_text, session = NULL)
+      } else {
+        file_url <- url(url_text, headers = c("UserAgent" = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      "AppleWebKit/537.36 (KHTML, like Gecko)",
+      "Chrome/124.0.0.0 Safari/537.36'))
+        html <- tryCatch(
+          readLines(con = file_url, warn=F),
+          error = function(e) {
+            message("Error occurred: Access might be denied. Try setting the `use_chromote` argument to `TRUE`")  # send error message
+            return(NULL)                            # return NULL on error
+          }
+        )
+        if (is.null(html)) {
+          return(data.frame())
+        }
+
+        close(file_url)
+      }
     }
 
-    tables <- XML::readHTMLTable(html)
+    if (class(html)[1] == 'xml_document') {
+      tables <- rvest::html_table(html, header = TRUE)
+      tables <- tables |> lapply(as.data.frame)
+      html <- as.character(html)
+    } else {
+      tables <- XML::readHTMLTable(html)
+    }
+
+
     if(!is.null(tables[[1]])) {
       df <- data.frame(as.matrix(tables[[1]]), stringsAsFactors = F)
     } else {
@@ -1609,6 +1665,7 @@ get_team_schedule <-
 #' String for the season stored as yyy1-y2 (2018-19 is current)
 #' @param team.name Alternative to using the id, you can get a team from data(teamids) with a season and team name specification.
 #' This inputs a team name, to be used along with season. This needs the school name not the complete team name, so "Duke" not "Duke Blue Devils".
+#' @param use_chromote Use headless browser to get rosters This is slower, but useful if you are getting errors about being forbidden to visit a link
 #' @importFrom XML readHTMLTable
 #' @import stringr
 #' @import dplyr
@@ -1632,7 +1689,8 @@ get_team_roster <-
            use_file = F,
            save_file = F,
            base_path = NA,
-           overwrite = F) {
+           overwrite = F,
+           use_chromote = F) {
 
     # If the user doesn't know id and instead gives a team name and season searches team DB for ID
     # This can only be done since 16-17 at the moment
@@ -1661,10 +1719,29 @@ get_team_roster <-
     } else if (file.exists(file_path) & use_file) {
       html <- readLines(file_path, warn=F)
     } else {
-      isUrlRead <- T
-      file_url <- url(url_text)
-      html <- readLines(con = file_url, warn=F)
-      close(file_url)
+      if (use_chromote == TRUE) {
+        html <- scrape_dynamic_tables(url_text, session = NULL)
+      } else {
+        file_url <- url(url_text, headers = c("UserAgent" = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      "AppleWebKit/537.36 (KHTML, like Gecko)",
+      "Chrome/124.0.0.0 Safari/537.36'))
+        html <- tryCatch(
+          readLines(con = file_url, warn=F),
+          error = function(e) {
+            message("Error occurred: Access might be denied. Try setting the `use_chromote` argument to `TRUE`")  # send error message
+            return(NULL)                            # return NULL on error
+          }
+        )
+        if (is.null(html)) {
+          return(data.frame())
+        }
+        close(file_url)
+
+      }
+    }
+
+    if (class(html)[1] == 'xml_document') {
+      html <- as.character(html)
     }
 
     #Find link to the team roster page
@@ -1690,14 +1767,38 @@ get_team_roster <-
     } else if (file.exists(file_path) & use_file) {
       html <- readLines(file_path, warn=F)
     } else {
-      isUrlRead <- T
-      file_url <- url(roster_url)
-      html <- readLines(con = file_url, warn=F)
-      close(file_url)
+      if (use_chromote == TRUE) {
+        html <- scrape_dynamic_tables(roster_url, session = NULL)
+      } else {
+        file_url <- url(roster_url, headers = c("UserAgent" = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      "AppleWebKit/537.36 (KHTML, like Gecko)",
+      "Chrome/124.0.0.0 Safari/537.36'))
+        html <- tryCatch(
+          readLines(con = file_url, warn=F),
+          error = function(e) {
+            message("Error occurred: Access might be denied. Try setting the `use_chromote` argument to `TRUE`")  # send error message
+            return(NULL)                            # return NULL on error
+          }
+        )
+        if (is.null(html)) {
+          return(data.frame())
+        }
+        close(file_url)
+
+      }
     }
 
-    table <- XML::readHTMLTable(html)[[1]][, 1:9] %>%
-      mutate(across(everything(), as.character))
+    if (class(html)[1] == 'xml_document') {
+      table <- rvest::html_table(html, header = TRUE)
+      table <- table |> lapply(as.data.frame)
+      table <- table[[2]][, 1:9] %>%
+        mutate(across(everything(), as.character))
+    } else {
+      table <- XML::readHTMLTable(html)[[1]][, 1:9] %>%
+        mutate(across(everything(), as.character))
+    }
+
+
     # Return the more usable roster page
     player <- table$Name
     clean_name <- player
