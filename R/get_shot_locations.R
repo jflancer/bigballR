@@ -77,7 +77,7 @@ get_shot_locations <- function(gameids) {
     dplyr::mutate(Side = dplyr::if_else(sum(x > 50) > 2, "right", "left")) %>%
     dplyr::ungroup() %>%
     dplyr::mutate(
-      bx = dplyr::if_else(Side == "right", 90, 4),
+      bx = dplyr::if_else(Side == "right", 88.75, 5.25),
       by = 25,
       Shot_Dist = sqrt((x - bx)^2 + (y - by)^2)
     ) %>%
