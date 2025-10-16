@@ -1358,7 +1358,8 @@ get_date_games <-
     isNeutral <- table[[6]][starting_rows] != ""
 
     #Informs user of how many games and games with a relevant ID were found
-    message(paste(date, "|", length(game_ids), "games found"))
+      message(paste0(date, " | ", length(home_team)," games (",length(game_ids), " Game IDs found)"))
+
 
     # Unfortunately, the game ID for boxscore isn't the same as the game ID for pbp
     # As a result, this function needs to convert from boxscore to pbp but as a result be slower
