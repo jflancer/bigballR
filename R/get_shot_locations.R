@@ -32,9 +32,9 @@ get_shot_locations <- function(gameids) {
         Half_Status = as.numeric(stringr::str_extract(play_description, "\\d")),
         Player = stringr::str_extract(play_description, "(?<= (missed|made) by ).+?(?=\\()"),
         Team = stringr::str_replace(
-          stringr::str_extract(play_description, "(?<=\\().+?(?=\\))"),
+          stringr::str_replace(stringr::str_extract(play_description, "\\(.*\\)"), "^\\((.*)\\)$", "\\1"),
           "&amp;", "&"
-        ),
+        ), #From issue96 on 10/17/2025
         Score = stringr::str_extract(play_description, "\\d+-\\d+$"),
         Time = stringr::str_extract(play_description, "\\d{2}:\\d{2}"),
         minutes = as.numeric(stringr::str_extract(Time, "^\\d{2}")),
@@ -116,7 +116,7 @@ join_pbp_shots = function(pbp_data, shot_data) {
     dplyr::group_by(ID, Game_Seconds, Shot_Result) %>%
     dplyr::mutate(shot_no = row_number()) %>%
     dplyr::ungroup() %>%
-    dplyr::select(ID, Game_Seconds, Shot_Result, shot_no, Team, Player, x, y)
+    dplyr::select(ID, Game_Seconds, Shot_Result, shot_no, Team, Player, x, y,Shot_Dist)
 
   shot_att_joined = shot_att %>%
     dplyr::left_join(

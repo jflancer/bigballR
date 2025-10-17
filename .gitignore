@@ -3,4 +3,11 @@
 *.Rbuildignore
 .Rproj.user/*
 .Rproj.user
-Icon
+Icon
+
+
+.Rhistory
+.Rdata
+.httr-oauth
+.DS_Store
+.quarto

@@ -3521,7 +3521,7 @@ scrape_box <-
       away_end <- nrow(away) - 2
     }
     away <- away[1:away_end,]
-    away$Team <- gsub(" \\((.*)\\)", "", background[3,1])
+    away$Team <- background[3,1] #From issue96 on 10/17/2025
     away <- away[,names(away) != 'Avg']
 
     home_end <- which(home[['Name']] == 'TEAM') - 1
@@ -3529,7 +3529,7 @@ scrape_box <-
       home_end <- nrow(home) - 2
     }
     home <- home[1:home_end,]
-    home$Team <- gsub(" \\((.*)\\)", "", background[4,1])
+    home$Team <- background[4,1] #From issue96 on 10/17/2025
     home <- home[,names(home) != 'Avg']
 
 
