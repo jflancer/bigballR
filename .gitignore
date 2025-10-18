@@ -3,4 +3,4 @@
 *.Rbuildignore
 .Rproj.user/*
 .Rproj.user
-Icon
+Icon^M
