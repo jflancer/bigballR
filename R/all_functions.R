@@ -1291,7 +1291,15 @@ get_date_games <-
     } else {
 
       if (use_chromote == TRUE) {
-        html <- scrape_dynamic_tables(url_text, session = NULL)
+        html <- try(scrape_dynamic_tables(url_text, session = NULL), silent = T)
+        if (class(html)[1] == 'try-error') {
+          message('Retry again')
+          html <- try(scrape_dynamic_tables(url_text, session = NULL), silent = T)
+          if (class(html)[1] == 'try-error') {
+            message('Retry again')
+            html <- scrape_dynamic_tables(url_text, session = NULL)
+          }
+        }
       } else {
         file_url <- url(url_text, headers = c("UserAgent" = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
       "AppleWebKit/537.36 (KHTML, like Gecko)",
@@ -1479,7 +1487,15 @@ get_team_schedule <-
 
       isUrlRead <- T
       if (use_chromote == TRUE) {
-        html <- scrape_dynamic_tables(url_text, session = NULL)
+        html <- try(scrape_dynamic_tables(url_text, session = NULL), silent = T)
+        if (class(html)[1] == 'try-error') {
+          message('Retry again')
+          html <- try(scrape_dynamic_tables(url_text, session = NULL), silent = T)
+          if (class(html)[1] == 'try-error') {
+            message('Retry again')
+            html <- scrape_dynamic_tables(url_text, session = NULL)
+          }
+        }
       } else {
         file_url <- url(url_text, headers = c("UserAgent" = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
       "AppleWebKit/537.36 (KHTML, like Gecko)",

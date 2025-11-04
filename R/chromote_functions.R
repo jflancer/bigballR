@@ -58,6 +58,8 @@ scrape_dynamic_tables <- function(url, session = NULL, pause_ms = 2000, return_a
   table_success <- FALSE
   retries <- 0
 
+  message("Attempt to scrape")
+
   while (!table_success && retries < 5) {
     session$Runtime$evaluate('new Promise(r => {
       const sel = "table";                                // TODO: tighten this to the exact table selector
@@ -73,6 +75,7 @@ scrape_dynamic_tables <- function(url, session = NULL, pause_ms = 2000, return_a
       table_success <- TRUE
     } else {
       retries <- retries + 1
+      message("Retry ", retries)
       Sys.sleep(pause_ms / 1000)
     }
 
