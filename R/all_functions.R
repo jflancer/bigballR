@@ -127,7 +127,9 @@ scrape_game <- function(game_id, session = NULL, save_file=F, use_file=F, base_p
           first_half[1, 2] == "period start"|
           first_half[1,2] == "jumpball startperiod")) |
         any(grepl("commercial",game[,2]))|
-        any(grepl("Technical",first_half[1,]))) {
+        any(grepl("Technical",first_half[1,]))|
+        any(grepl("jumpball lost",first_half[1,]))|
+        any(grepl("jumpball won",first_half[1,]))){
       "V2"
     } else{
       "V1"
