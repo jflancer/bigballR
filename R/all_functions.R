@@ -3228,6 +3228,8 @@ convert_events <- function(events) {
     grepl("Team, foul", events) ~ "Team Foul",
     grepl("turnover", events) ~ "Turnover",
     grepl("wrongbasket", events) ~ "Wrong Basket (2pt Opp. Team)",
+    grepl("coachchallenge outofbounds",events) ~ "Challenge (Out of Bounds)",
+    grepl("coachchallenge goal",events) ~ "Challenge (Interference)",
     is.na(events) ~ NA_character_,
     #if this comes up, I have not discovered the event and need to classify and convert it
     TRUE ~ "ERROR CHECK THE EVENT"
