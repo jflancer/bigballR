@@ -4,6 +4,15 @@
 package primarily revolves around the use of schedule, roster, and play-by-play data via stats.ncaa.com, and
 additionally has features to calculate lineups, on/off results, and player game and multi-game statistics.
 
+## UPDATE 09/30/2026 - Change in NCAA Terms of Service
+
+The stats.ncaa.org website has updated again, making `bigballR` in its current form unable to perform previous functions. At the same time, as of early September, the NCAA updated their [Terms of Service](https://www.ncaa.org/terms-of-service/) to now include specific language regarding scraping, including
+
+- *Engaging in unauthorized robots, spiders, offline readers, or like devices, scraping, or harvesting of content orinformation, or using any other unauthorized automated means to compile information, or any other means that accesses the Site in a manner which sends more request messages to the Site server in any given period oftime than a typical human would normally produce in the same period by using a conventional on-line Web browser to read, view, and submit materials*
+
+As a result, in line with the updated Terms of Service, there will be no additional updates made to this package.
+
+
 ## UPDATE 08/16/2025 -- Chrome Required
 
 The stats.ncaa.org website has updated match pages to dynamically load, which means that traditional web scraping with packages like `rvest` don't work. To get around this, we are now using the `chromote` package, which uses a headless chrome browser to visit the page, wait for the content to load, then scrape the information. This requires that the user has Chrome installed on the system. If you have any problems, create an Issue here https://github.com/jflancer/bigballR/issues.
